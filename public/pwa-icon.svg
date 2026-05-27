@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="96" y1="48" x2="416" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a" />
+      <stop offset="1" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="accent" x1="156" y1="126" x2="368" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67e8f9" />
+      <stop offset="0.54" stop-color="#38bdf8" />
+      <stop offset="1" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="120" fill="url(#bg)" />
+  <path
+    d="M164 154c0-16.6 13.4-30 30-30h124c16.6 0 30 13.4 30 30v37H164v-37Z"
+    fill="rgba(255,255,255,0.08)"
+  />
+  <path
+    d="M164 191h184v104c0 16.6-13.4 30-30 30H194c-16.6 0-30-13.4-30-30V191Z"
+    fill="rgba(255,255,255,0.06)"
+  />
+  <path
+    d="M194 244l41 40 69-77 60 63"
+    stroke="url(#accent)"
+    stroke-width="28"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="345" cy="214" r="16" fill="#f59e0b" />
+  <rect x="164" y="334" width="184" height="24" rx="12" fill="rgba(255,255,255,0.12)" />
+  <rect x="164" y="374" width="124" height="24" rx="12" fill="rgba(255,255,255,0.08)" />
+</svg>
