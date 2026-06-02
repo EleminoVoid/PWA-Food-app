@@ -1,0 +1,130 @@
+/**
+ * ===========================================
+ * SCANNER FRAME STYLES
+ * ===========================================
+ * 
+ * EASY CUSTOMIZATION VARIABLES:
+ * - --frame-color: Color of the corner brackets (default: yellow)
+ * - --frame-size: Length of each bracket arm (default: 40px)
+ * - --frame-thickness: Line thickness (default: 3px)
+ * - --frame-width: Total width of scan area (default: 70%)
+ * - --frame-height: Total height of scan area (default: 55%)
+ * ===========================================
+ */
+
+.scanner-frame {
+  /* CHANGE THESE TO CUSTOMIZE THE FRAME */
+  --frame-color: #facc15;
+  --frame-size: 40px;
+  --frame-thickness: 3px;
+  --frame-width: 70%;
+  --frame-height: 55%;
+  --frame-radius: 4px;
+  
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--frame-width);
+  height: var(--frame-height);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Base corner styling */
+.scanner-corner {
+  position: absolute;
+  width: var(--frame-size);
+  height: var(--frame-size);
+}
+
+/* Each corner uses borders to create the L-shape */
+.scanner-corner::before,
+.scanner-corner::after {
+  content: '';
+  position: absolute;
+  background: var(--frame-color);
+  border-radius: var(--frame-radius);
+}
+
+/* TOP LEFT corner */
+.scanner-corner--top-left {
+  top: 0;
+  left: 0;
+}
+.scanner-corner--top-left::before {
+  top: 0;
+  left: 0;
+  width: var(--frame-size);
+  height: var(--frame-thickness);
+}
+.scanner-corner--top-left::after {
+  top: 0;
+  left: 0;
+  width: var(--frame-thickness);
+  height: var(--frame-size);
+}
+
+/* TOP RIGHT corner */
+.scanner-corner--top-right {
+  top: 0;
+  right: 0;
+}
+.scanner-corner--top-right::before {
+  top: 0;
+  right: 0;
+  width: var(--frame-size);
+  height: var(--frame-thickness);
+}
+.scanner-corner--top-right::after {
+  top: 0;
+  right: 0;
+  width: var(--frame-thickness);
+  height: var(--frame-size);
+}
+
+/* BOTTOM LEFT corner */
+.scanner-corner--bottom-left {
+  bottom: 0;
+  left: 0;
+}
+.scanner-corner--bottom-left::before {
+  bottom: 0;
+  left: 0;
+  width: var(--frame-size);
+  height: var(--frame-thickness);
+}
+.scanner-corner--bottom-left::after {
+  bottom: 0;
+  left: 0;
+  width: var(--frame-thickness);
+  height: var(--frame-size);
+}
+
+/* BOTTOM RIGHT corner */
+.scanner-corner--bottom-right {
+  bottom: 0;
+  right: 0;
+}
+.scanner-corner--bottom-right::before {
+  bottom: 0;
+  right: 0;
+  width: var(--frame-size);
+  height: var(--frame-thickness);
+}
+.scanner-corner--bottom-right::after {
+  bottom: 0;
+  right: 0;
+  width: var(--frame-thickness);
+  height: var(--frame-size);
+}
+
+/* Mobile adjustments */
+@media (max-width: 400px) {
+  .scanner-frame {
+    --frame-size: 30px;
+    --frame-thickness: 2px;
+    --frame-width: 80%;
+    --frame-height: 50%;
+  }
+}

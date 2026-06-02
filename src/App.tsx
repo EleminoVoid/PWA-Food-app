@@ -1,40 +1,66 @@
+/**
+ * ===========================================
+ * DOCUMENT SCANNER APP
+ * ===========================================
+ * Main application component that combines:
+ * - Camera feed (video element)
+ * - Scanner frame overlay (yellow corners)
+ * - Top toolbar (utilities menu)
+ * - Bottom bar (gallery, scan, presets)
+ * 
+ * CUSTOMIZATION GUIDE:
+ * - Each component is in its own file in /components
+ * - Colors and sizes use CSS variables for easy editing
+ * - Camera settings are in CAMERA_CONFIG below
+ * ===========================================
+ */
+
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { TopToolbar } from './components/toolbar/TopToolbar'
+import { ScannerFrame } from './components/scanner/ScannerFrame'
+import { BottomBar } from './components/bottom/BottomBar'
 import './App.css'
 
+/**
+ * CAMERA CONFIGURATION
+ * Change these settings to customize camera behavior
+ */
 const CAMERA_CONFIG = {
+  /** 'environment' = back camera, 'user' = front camera */
   facingMode: 'environment' as const,
-  overlayLabel: 'Tap to capture',
+  /** Message shown when camera is loading */
+  loadingMessage: 'Initializing camera...',
 }
 
-const floatingBubbles = [
-  { id: 1, text: 'Fresh', top: '10%', left: '8%', delay: '0s' },
-  { id: 2, text: 'Snap', top: '22%', right: '10%', delay: '0.6s' },
-  { id: 3, text: 'Analyze', top: '58%', left: '6%', delay: '1.2s' },
-]
-
 function App() {
+  // =========================================
+  // STATE & REFS
+  // =========================================
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
   const [isCameraActive, setIsCameraActive] = useState(false)
-  const [latestImage, setLatestImage] = useState('')
+  const [scannedPages, setScannedPages] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
 
+  // =========================================
+  // CAMERA FUNCTIONS
+  // =========================================
+  
+  /** Stop the camera stream */
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setIsCameraActive(false)
   }
 
+  /** Start the camera stream */
   const startCamera = async () => {
     const video = videoRef.current
-
-    if (!video) {
-      return
-    }
+    if (!video) return
 
     setErrorMessage('')
     stopCamera()
@@ -58,35 +84,28 @@ function App() {
     }
   }
 
+  // Start camera on mount, stop on unmount
   useEffect(() => {
     startCamera()
-
-    return () => {
-      stopCamera()
-    }
+    return () => stopCamera()
   }, [])
 
-  const applyPreviewUrl = (nextUrl: string) => {
-    setLatestImage((currentUrl) => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl)
-      }
-
-      return nextUrl
-    })
-  }
-
+  // =========================================
+  // CAPTURE FUNCTIONS
+  // =========================================
+  
+  /** Capture a photo from the video feed */
   const capturePhoto = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
 
     if (!video || !canvas) {
-      setErrorMessage('Camera capture is not ready yet.')
+      setErrorMessage('Camera not ready.')
       return
     }
 
     if (!video.videoWidth || !video.videoHeight) {
-      setErrorMessage('Wait for the camera feed to load before taking a photo.')
+      setErrorMessage('Wait for the camera to load.')
       return
     }
 
@@ -94,9 +113,8 @@ function App() {
     canvas.height = video.videoHeight
 
     const context = canvas.getContext('2d')
-
     if (!context) {
-      setErrorMessage('Unable to prepare the photo buffer.')
+      setErrorMessage('Unable to capture.')
       return
     }
 
@@ -104,94 +122,106 @@ function App() {
 
     canvas.toBlob((blob) => {
       if (!blob) {
-        setErrorMessage('Could not save the captured photo.')
+        setErrorMessage('Could not save the photo.')
         return
       }
 
-      applyPreviewUrl(URL.createObjectURL(blob))
+      // Increment scanned pages count
+      setScannedPages((prev) => prev + 1)
       setErrorMessage('')
+      
+      // Here you could save the blob or send it to a server
+      // For now, we just count the pages
     }, 'image/jpeg', 0.92)
   }
 
+  /** Handle file selection from gallery */
   const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    if (!file) return
 
-    if (!file) {
-      return
-    }
-
-    applyPreviewUrl(URL.createObjectURL(file))
+    setScannedPages((prev) => prev + 1)
     setErrorMessage('')
     event.target.value = ''
   }
 
+  // =========================================
+  // EVENT HANDLERS
+  // =========================================
+  
+  const handleToolClick = (toolId: string) => {
+    // Handle tool clicks - implement as needed
+    console.log('Tool clicked:', toolId)
+  }
+
+  const handleGalleryClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleScanClick = () => {
+    capturePhoto()
+  }
+
+  const handlePresetsClick = () => {
+    // Handle presets menu - implement as needed
+    console.log('Presets clicked')
+  }
+
+  // =========================================
+  // RENDER
+  // =========================================
   return (
-    <main className="camera-app" aria-label="Food camera app">
-      <section className="camera-stage" aria-label="Camera preview">
-        <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
-
-        <div className="floating-bubbles" aria-hidden="true">
-          {floatingBubbles.map((bubble) => (
-            <span
-              key={bubble.id}
-              className="floating-bubble"
-              style={{
-                top: bubble.top,
-                left: bubble.left,
-                right: bubble.right,
-                animationDelay: bubble.delay,
-              }}
-            >
-              {bubble.text}
-            </span>
-          ))}
-        </div>
-
-        {!isCameraActive ? (
-          <div className="camera-overlay">
-            <p>{CAMERA_CONFIG.overlayLabel}</p>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          className="capture-button"
-          onClick={capturePhoto}
-          aria-label="Take photo"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 4.5 7.6 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.1L15 4.5H9Zm3 12.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          className="gallery-button"
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Open photos"
-        >
-          {latestImage ? (
-            <img className="gallery-thumb" src={latestImage} alt="Latest selected image" />
-          ) : (
-            <span className="gallery-fallback" aria-hidden="true">
-              ▣
-            </span>
-          )}
-        </button>
-
-        {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
-
-        <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden-input"
-          onChange={handleFilePick}
+    <main className="scanner-app" aria-label="Document Scanner">
+      {/* CAMERA FEED */}
+      <section className="camera-container" aria-label="Camera preview">
+        <video
+          ref={videoRef}
+          className="camera-video"
+          muted
+          autoPlay
+          playsInline
         />
+        
+        {/* Loading overlay when camera isn't active */}
+        {!isCameraActive && !errorMessage && (
+          <div className="camera-overlay">
+            <p>{CAMERA_CONFIG.loadingMessage}</p>
+          </div>
+        )}
       </section>
+
+      {/* SCANNER FRAME - Yellow corner brackets */}
+      <ScannerFrame />
+
+      {/* TOP TOOLBAR - Utilities menu */}
+      <TopToolbar onToolClick={handleToolClick} />
+
+      {/* BOTTOM BAR - Gallery, Scan, Presets */}
+      <BottomBar
+        scannedCount={scannedPages}
+        onGalleryClick={handleGalleryClick}
+        onScanClick={handleScanClick}
+        onPresetsClick={handlePresetsClick}
+        scanDisabled={!isCameraActive}
+      />
+
+      {/* ERROR MESSAGE */}
+      {errorMessage && (
+        <div className="error-toast" role="alert">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Hidden elements for capturing */}
+      <canvas ref={canvasRef} className="sr-only" aria-hidden="true" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={handleFilePick}
+        aria-label="Select image from gallery"
+      />
     </main>
   )
 }

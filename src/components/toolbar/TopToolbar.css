@@ -1,0 +1,106 @@
+/**
+ * ===========================================
+ * TOP TOOLBAR STYLES
+ * ===========================================
+ * 
+ * COLOR VARIABLES (easy to change):
+ * - --toolbar-bg: Background color of toolbar buttons
+ * - --toolbar-text: Text color
+ * - --toolbar-border: Border color
+ * ===========================================
+ */
+
+.top-toolbar {
+  --toolbar-bg: rgba(60, 60, 60, 0.85);
+  --toolbar-text: #ffffff;
+  --toolbar-border: rgba(255, 255, 255, 0.1);
+  
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+/* COLLAPSED STATE - Utilities button */
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--toolbar-bg);
+  color: var(--toolbar-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.toolbar-button:hover,
+.toolbar-button:focus-visible {
+  background: rgba(80, 80, 80, 0.9);
+}
+
+.toolbar-button:focus-visible {
+  outline: 2px solid #facc15;
+  outline-offset: 2px;
+}
+
+/* EXPANDED STATE - Tools row */
+.toolbar-expanded {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 24px;
+  background: var(--toolbar-bg);
+  backdrop-filter: blur(10px);
+}
+
+/* Individual tool button in expanded state */
+.toolbar-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--toolbar-text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.toolbar-tool:hover,
+.toolbar-tool:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-tool:focus-visible {
+  outline: 2px solid #facc15;
+  outline-offset: 2px;
+}
+
+/* Close button styling - slightly different */
+.toolbar-tool--close {
+  margin-left: 4px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 400px) {
+  .toolbar-expanded {
+    gap: 2px;
+    padding: 6px 8px;
+  }
+  
+  .toolbar-tool {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+}

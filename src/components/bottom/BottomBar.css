@@ -1,0 +1,146 @@
+/**
+ * ===========================================
+ * BOTTOM BAR STYLES
+ * ===========================================
+ * 
+ * EASY CUSTOMIZATION VARIABLES:
+ * - --bar-bg: Background color of the control bar
+ * - --bar-text: Text color
+ * - --accent-color: Yellow accent for scan button
+ * - --accent-text: Text color on accent background
+ * ===========================================
+ */
+
+.bottom-bar {
+  /* CHANGE THESE TO CUSTOMIZE COLORS */
+  --bar-bg: rgba(50, 50, 50, 0.9);
+  --bar-text: #ffffff;
+  --accent-color: #facc15;
+  --accent-text: #1a1a1a;
+  
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* SCANNED PAGES COUNT */
+.scanned-count {
+  padding: 8px 20px;
+  border-radius: 20px;
+  background: var(--bar-bg);
+  color: var(--bar-text);
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+/* MAIN CONTROLS CONTAINER */
+.bottom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-radius: 30px;
+  background: var(--bar-bg);
+  backdrop-filter: blur(10px);
+  width: 100%;
+  max-width: 360px;
+}
+
+/* SIDE BUTTONS (Gallery and Presets) */
+.bottom-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--bar-text);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.bottom-button:hover,
+.bottom-button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bottom-button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+/* Presets button - has "DOC" label styling */
+.presets-label {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* MAIN SCAN BUTTON - Big yellow circle */
+.scan-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: var(--accent-text);
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(250, 204, 21, 0.3);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.scan-button:hover:not(:disabled),
+.scan-button:focus-visible:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px rgba(250, 204, 21, 0.4);
+}
+
+.scan-button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+.scan-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scan-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Mobile adjustments */
+@media (max-width: 400px) {
+  .bottom-controls {
+    padding: 10px 16px;
+    gap: 12px;
+    max-width: 320px;
+  }
+  
+  .scan-button {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .bottom-button {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+}

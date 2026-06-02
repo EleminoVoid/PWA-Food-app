@@ -1,63 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600;700&display=swap');
+/**
+ * ===========================================
+ * GLOBAL STYLES
+ * ===========================================
+ * Base styles that apply to the entire app.
+ * Keep this file minimal - component styles
+ * should go in their respective CSS files.
+ * ===========================================
+ */
+
+/* Google Font - Clean, readable system-like font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  font-family: 'Work Sans', 'Trebuchet MS', sans-serif;
+  /* Base font */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #dbeafe;
-  background:
-    radial-gradient(circle at top, #12304d 0%, #07111f 40%, #020617 100%);
+  
+  /* Color scheme */
+  color-scheme: dark;
+  
+  /* Font rendering */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color-scheme: dark;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.14), transparent 22%),
-    radial-gradient(circle at 80% 10%, rgba(250, 204, 21, 0.08), transparent 18%),
-    linear-gradient(180deg, #0f172a 0%, #020617 100%);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 95%);
-  pointer-events: none;
-}
-
-a {
-  color: inherit;
-}
-
-img,
-svg {
-  display: block;
-  max-width: 100%;
-}
-
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-#root {
-  min-height: 100vh;
 }
