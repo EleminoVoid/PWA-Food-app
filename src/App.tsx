@@ -1,86 +1,196 @@
+import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import './App.css'
 
+const CAMERA_CONFIG = {
+  facingMode: 'environment' as const,
+  overlayLabel: 'Tap to capture',
+}
+
+const floatingBubbles = [
+  { id: 1, text: 'Fresh', top: '10%', left: '8%', delay: '0s' },
+  { id: 2, text: 'Snap', top: '22%', right: '10%', delay: '0.6s' },
+  { id: 3, text: 'Analyze', top: '58%', left: '6%', delay: '1.2s' },
+]
+
 function App() {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [latestImage, setLatestImage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    setIsCameraActive(false)
+  }
+
+  const startCamera = async () => {
+    const video = videoRef.current
+
+    if (!video) {
+      return
+    }
+
+    setErrorMessage('')
+    stopCamera()
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: CAMERA_CONFIG.facingMode },
+        audio: false,
+      })
+
+      streamRef.current = stream
+      video.srcObject = stream
+      await video.play()
+      setIsCameraActive(true)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Camera access failed. Check permissions and try again.',
+      )
+    }
+  }
+
+  useEffect(() => {
+    startCamera()
+
+    return () => {
+      stopCamera()
+    }
+  }, [])
+
+  const applyPreviewUrl = (nextUrl: string) => {
+    setLatestImage((currentUrl) => {
+      if (currentUrl) {
+        URL.revokeObjectURL(currentUrl)
+      }
+
+      return nextUrl
+    })
+  }
+
+  const capturePhoto = () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+
+    if (!video || !canvas) {
+      setErrorMessage('Camera capture is not ready yet.')
+      return
+    }
+
+    if (!video.videoWidth || !video.videoHeight) {
+      setErrorMessage('Wait for the camera feed to load before taking a photo.')
+      return
+    }
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    const context = canvas.getContext('2d')
+
+    if (!context) {
+      setErrorMessage('Unable to prepare the photo buffer.')
+      return
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setErrorMessage('Could not save the captured photo.')
+        return
+      }
+
+      applyPreviewUrl(URL.createObjectURL(blob))
+      setErrorMessage('')
+    }, 'image/jpeg', 0.92)
+  }
+
+  const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    applyPreviewUrl(URL.createObjectURL(file))
+    setErrorMessage('')
+    event.target.value = ''
+  }
+
   return (
-    <main className="app-shell">
-      <section className="hero-card">
-        <div className="status-row">
-          <span className="pill">PWA starter</span>
-          <span className="status-dot">Offline-ready foundation</span>
+    <main className="camera-app" aria-label="Food camera app">
+      <section className="camera-stage" aria-label="Camera preview">
+        <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
+
+        <div className="floating-bubbles" aria-hidden="true">
+          {floatingBubbles.map((bubble) => (
+            <span
+              key={bubble.id}
+              className="floating-bubble"
+              style={{
+                top: bubble.top,
+                left: bubble.left,
+                right: bubble.right,
+                animationDelay: bubble.delay,
+              }}
+            >
+              {bubble.text}
+            </span>
+          ))}
         </div>
 
-        <div className="hero-copy">
-          <p className="eyebrow">Progressive web app checklist</p>
-          <h1>Build an app that installs like native and works when the network does not.</h1>
-          <p className="lede">
-            This starter gives you a React shell, a manifest, a service worker, and a
-            clean launch screen so you can focus on product behavior instead of setup.
-          </p>
-        </div>
-
-        <div className="hero-actions">
-          <a className="primary-action" href="#basics">
-            See the essentials
-          </a>
-          <a
-            className="secondary-action"
-            href="https://web.dev/explore/progressive-web-apps"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Read the PWA guide
-          </a>
-        </div>
-
-        <ul className="feature-strip" aria-label="PWA capabilities">
-          <li>
-            <strong>Installable</strong>
-            <span>Manifest + icon</span>
-          </li>
-          <li>
-            <strong>Cached</strong>
-            <span>Offline shell</span>
-          </li>
-          <li>
-            <strong>Responsive</strong>
-            <span>Mobile-first layout</span>
-          </li>
-        </ul>
-      </section>
-
-      <section className="content-grid" id="basics">
-        <article className="panel">
-          <p className="panel-label">Step 1</p>
-          <h2>Define the product surface</h2>
-          <p>
-            Start with one clear workflow, one dashboard, or one daily task. PWA features
-            work best when the app has a focused core purpose.
-          </p>
-        </article>
-
-        <article className="panel">
-          <p className="panel-label">Step 2</p>
-          <h2>Decide what should work offline</h2>
-          <p>
-            Pick the minimum screens and data that should remain usable if connectivity is
-            poor or unavailable.
-          </p>
-        </article>
-
-        <article className="panel panel-wide">
-          <p className="panel-label">Step 3</p>
-          <h2>Ship the install experience</h2>
-          <p>
-            Add a manifest, a service worker, an app icon, and a theme color. Then test the
-            app from the browser menu or install prompt.
-          </p>
-          <div className="checklist">
-            <span>App manifest</span>
-            <span>Service worker</span>
-            <span>Cached assets</span>
-            <span>Standalone display</span>
+        {!isCameraActive ? (
+          <div className="camera-overlay">
+            <p>{CAMERA_CONFIG.overlayLabel}</p>
           </div>
-        </article>
+        ) : null}
+
+        <button
+          type="button"
+          className="capture-button"
+          onClick={capturePhoto}
+          aria-label="Take photo"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 4.5 7.6 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.1L15 4.5H9Zm3 12.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          className="gallery-button"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Open photos"
+        >
+          {latestImage ? (
+            <img className="gallery-thumb" src={latestImage} alt="Latest selected image" />
+          ) : (
+            <span className="gallery-fallback" aria-hidden="true">
+              ▣
+            </span>
+          )}
+        </button>
+
+        {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
+
+        <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden-input"
+          onChange={handleFilePick}
+        />
       </section>
     </main>
   )

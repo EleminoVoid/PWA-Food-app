@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Food Scan PWA</string>
+    <string name="title_activity_main">Food Scan PWA</string>
+    <string name="package_name">com.pwa.foodscanner</string>
+    <string name="custom_url_scheme">com.pwa.foodscanner</string>
+</resources>
