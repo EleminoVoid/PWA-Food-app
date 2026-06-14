@@ -1,73 +1,119 @@
-# React + TypeScript + Vite
+# PWA Food App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository contains a React + Vite progressive web app with a small Express API and a Capacitor Android wrapper. You can run it as a normal web app, install it as a PWA, or open the Android project in Android Studio.
 
-Currently, two official plugins are available:
+## What’s In The Repo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/` contains the React app.
+- `server/src/index.ts` contains the local API server.
+- `android/` contains the Capacitor Android project.
+- `vite.config.ts` proxies `/api` calls to the backend on port `3001`.
 
-## React Compiler
+## Requirements
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 18 or newer.
+- npm.
+- Android Studio if you want to build or run the Android app.
+- JDK 17 for Android builds.
 
-## Expanding the ESLint configuration
+## 1. Install Dependencies
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+From the project root:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 2. Start The App Locally
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+This project starts both the front end and the API server together:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
+```
+
+What this does:
+
+- Starts the Vite dev server for the PWA.
+- Starts the Express server with hot reload.
+- Keeps `/api` requests working through the Vite proxy.
+
+Open the Vite URL shown in the terminal, usually `http://localhost:5173`.
+
+If you want to run the pieces separately:
+
+```bash
+npm run dev:client
+npm run dev:server
+```
+
+## 3. Build The App For Production
+
+Before syncing to Android, build the web app first:
+
+```bash
+npm run build
+```
+
+This produces the static web output in `dist/`, which is what Capacitor uses.
+
+## 4. Sync The Web Build To Android
+
+After building, copy the latest web assets into the Android project:
+
+```bash
+npx cap sync android
+```
+
+Use this again any time you change the web app and want Android Studio to see the latest build.
+
+## 5. Open In Android Studio
+
+You have two easy options:
+
+### Option A: Open From The Command Line
+
+```bash
+npx cap open android
+```
+
+This launches Android Studio with the correct project already selected.
+
+### Option B: Open The Folder Manually
+
+In Android Studio, choose **Open** and select the `android/` folder in this repo.
+
+## 6. Run The Android App
+
+Once the project is open in Android Studio:
+
+1. Wait for Gradle sync to finish.
+2. Select an emulator or connect a physical Android device.
+3. Click **Run**.
+
+## Typical Development Loop
+
+1. Change the web app in `src/`.
+2. Run `npm run dev` while working on the UI.
+3. When you want to test Android, run `npm run build`.
+4. Run `npx cap sync android`.
+5. Re-open or refresh the Android Studio project.
+
+## Troubleshooting
+
+- If the Android app shows old content, run `npm run build` and then `npx cap sync android` again.
+- If API calls fail in the browser, make sure `npm run dev:server` is running and listening on port `3001`.
+- If Android Studio cannot build, verify that JDK 17 is installed and selected.
+- If the app will not open on a device, check the emulator/device connection and Gradle sync errors first.
+
+## Useful Commands
+
+```bash
+npm run dev
+npm run dev:client
+npm run dev:server
+npm run build
+npm run lint
+npx cap sync android
+npx cap open android
 ```
