@@ -180,7 +180,7 @@
             <line x1="16.5" y1="16.5" x2="22" y2="22"/>
           </svg>
         </span>
-        <h2 id="onboard-title">Welcome to NutriScan</h2>
+        <h2 id="onboard-title">Welcome to FoodScan</h2>
       </div>
 
       <p class="modal-subtitle">Identify any food and get instant nutrition info — entirely on-device.</p>
