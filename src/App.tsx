@@ -2,43 +2,38 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './App.css'
 
-// ── ONNX Integration Guide ─────────────────────────────────────────────────────
-//
-// 1. Install the runtime (inside svelte-app or the root — wherever you bundle):
-//      pnpm add onnxruntime-web
-//
-// 2. Drop your model at:
-//      public/models/food_classifier.onnx
-//    Vite / the dev server will serve public/ as the web root.
-//
-// 3. Create the session once (e.g. top-level module scope so it only loads once):
-//      import * as ort from 'onnxruntime-web'
-//      const sessionPromise = ort.InferenceSession.create('/models/food_classifier.onnx')
-//
-// 4. Pre-process: draw the captured image onto a 224×224 canvas, read pixels:
-//      const { data } = ctx.getImageData(0, 0, 224, 224)  // Uint8ClampedArray RGBA
-//      const float32 = new Float32Array(3 * 224 * 224)
-//      for (let i = 0; i < 224 * 224; i++) {
-//        float32[i]               = data[i * 4]     / 255  // R channel
-//        float32[i + 224 * 224]   = data[i * 4 + 1] / 255  // G channel
-//        float32[i + 224 * 224*2] = data[i * 4 + 2] / 255  // B channel
-//      }
-//      const tensor = new ort.Tensor('float32', float32, [1, 3, 224, 224])
-//
-// 5. Run inference and find the top class:
-//      const session = await sessionPromise
-//      const { output } = await session.run({ input: tensor })
-//      const scores = Array.from(output.data as Float32Array)
-//      const topIdx = scores.indexOf(Math.max(...scores))
-//      const label  = LABELS[topIdx]      // your label string array
-//      const conf   = scores[topIdx]      // 0–1 confidence
-//
-// 6. Map topIdx → nutrition data using a local JSON lookup table or an
-//    edge function call. Pass { label, conf, ...nutrition } to your result UI.
-//
-// The capturePhoto() function below already draws to a canvas and creates the
-// blob URL — extend it to also run inference immediately after the draw step.
-// ──────────────────────────────────────────────────────────────────────────────
+/* ── ONNX Integration Guide (uncomment when ready to wire in the model) ────────
+ *
+ * 1. Install the runtime:
+ *      pnpm add onnxruntime-web
+ *
+ * 2. Serve the model from:
+ *      public/models/food_classifier.onnx
+ *
+ * 3. Create the session once at module scope:
+ *      import * as ort from 'onnxruntime-web'
+ *      const sessionPromise = ort.InferenceSession.create('/models/food_classifier.onnx')
+ *
+ * 4. Pre-process — draw to 224×224, extract CHW Float32Array:
+ *      const { data } = ctx.getImageData(0, 0, 224, 224)
+ *      const float32 = new Float32Array(3 * 224 * 224)
+ *      for (let i = 0; i < 224 * 224; i++) {
+ *        float32[i]             = data[i*4]   / 255   // R
+ *        float32[i + 224*224]   = data[i*4+1] / 255   // G
+ *        float32[i + 224*224*2] = data[i*4+2] / 255   // B
+ *      }
+ *      const tensor = new ort.Tensor('float32', float32, [1, 3, 224, 224])
+ *
+ * 5. Run and get top-1 label:
+ *      const session = await sessionPromise
+ *      const { output } = await session.run({ input: tensor })
+ *      const scores = Array.from(output.data as Float32Array)
+ *      const topIdx = scores.indexOf(Math.max(...scores))
+ *      const label  = LABELS[topIdx]   // string array of class names
+ *
+ * 6. Display the label — currently the app only shows the food name.
+ *    Nutrition lookup and results card are commented out until the model is ready.
+ * ────────────────────────────────────────────────────────────────────────────── */
 
 const CAMERA_CONFIG = {
   facingMode: 'environment' as const,
@@ -81,7 +76,7 @@ const steps = [
       </svg>
     ),
     title: 'Tap the shutter',
-    body: 'Press the large white button to capture. The on-device ONNX model runs instantly — no internet needed.',
+    body: 'Press the large white button to capture. The on-device ONNX model identifies the food — no internet needed.',
   },
   {
     id: 4,
@@ -108,7 +103,7 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
           </svg>
           <h2 id="onboard-title" className="modal-title">Welcome to NutriScan</h2>
           <p className="modal-subtitle">
-            Identify any food and get instant nutrition info — entirely on-device.
+            Point your camera at any food and the app will identify it — entirely on-device.
           </p>
         </div>
 
@@ -227,8 +222,16 @@ function App() {
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-    // ── TODO: run ONNX inference here (see guide at the top of this file) ──
-    // Scale canvas to 224×224, extract Float32Array CHW tensor, call session.run()
+    // ── TODO (when model is ready) ───────────────────────────────────────────
+    // Run ONNX inference on the canvas pixels to get the food name.
+    // See the integration guide at the top of this file for the full steps.
+    // setFoodLabel(label)   <-- uncomment once inference is wired up
+    //
+    // Features commented out until inference is ready:
+    //   - Nutrition card (calories, protein, carbs, fat)
+    //   - Confidence score chip
+    //   - Results panel / history list
+    // ─────────────────────────────────────────────────────────────────────────
 
     canvas.toBlob(
       (blob) => {
