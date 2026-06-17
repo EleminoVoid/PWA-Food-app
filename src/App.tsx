@@ -1,133 +1,162 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './App.css'
 
-/* ── ONNX Integration Guide (uncomment when ready to wire in the model) ────────
- *
- * 1. Install the runtime:
- *      pnpm add onnxruntime-web
- *
- * 2. Serve the model from:
- *      public/models/food_classifier.onnx
- *
- * 3. Create the session once at module scope:
- *      import * as ort from 'onnxruntime-web'
- *      const sessionPromise = ort.InferenceSession.create('/models/food_classifier.onnx')
- *
- * 4. Pre-process — draw to 224×224, extract CHW Float32Array:
- *      const { data } = ctx.getImageData(0, 0, 224, 224)
- *      const float32 = new Float32Array(3 * 224 * 224)
- *      for (let i = 0; i < 224 * 224; i++) {
- *        float32[i]             = data[i*4]   / 255   // R
- *        float32[i + 224*224]   = data[i*4+1] / 255   // G
- *        float32[i + 224*224*2] = data[i*4+2] / 255   // B
- *      }
- *      const tensor = new ort.Tensor('float32', float32, [1, 3, 224, 224])
- *
- * 5. Run and get top-1 label:
- *      const session = await sessionPromise
- *      const { output } = await session.run({ input: tensor })
- *      const scores = Array.from(output.data as Float32Array)
- *      const topIdx = scores.indexOf(Math.max(...scores))
- *      const label  = LABELS[topIdx]   // string array of class names
- *
- * 6. Display the label — currently the app only shows the food name.
- *    Nutrition lookup and results card are commented out until the model is ready.
- * ────────────────────────────────────────────────────────────────────────────── */
-
-const CAMERA_CONFIG = {
-  facingMode: 'environment' as const,
-  overlayLabel: 'Tap to capture',
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
+type FoodProfile = {
+  name: string
+  category: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  fiber: number
+  confidence: number
+  tip: string
+}
+
+type ScanRecord = FoodProfile & {
+  id: string
+  source: 'camera' | 'upload'
+  imageDataUrl: string
+  createdAt: string
+}
+
+type Screen = 'home' | 'scan' | 'history'
+
+const HISTORY_KEY = 'nutriscan_history'
 const ONBOARDING_KEY = 'nutriscan_onboarded'
 
-const steps = [
+const foodProfiles: FoodProfile[] = [
   {
-    id: 1,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-        <circle cx="12" cy="13" r="4" />
-      </svg>
-    ),
-    title: 'Open the camera',
-    body: 'The camera launches automatically when you open the app. Make sure you are in a well-lit area.',
+    name: 'Garden salad bowl',
+    category: 'Vegetable meal',
+    calories: 260,
+    protein: 8,
+    carbs: 28,
+    fat: 13,
+    fiber: 9,
+    confidence: 91,
+    tip: 'Add beans, egg, tofu, or grilled chicken if this is your main meal.',
   },
   {
-    id: 2,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <polyline points="3 7 3 3 7 3" />
-        <polyline points="17 3 21 3 21 7" />
-        <polyline points="21 17 21 21 17 21" />
-        <polyline points="7 21 3 21 3 17" />
-      </svg>
-    ),
-    title: 'Frame the food',
-    body: 'Fill the frame with the main food item. Good lighting and a steady hand give the best results.',
+    name: 'Chicken rice plate',
+    category: 'Balanced meal',
+    calories: 520,
+    protein: 34,
+    carbs: 58,
+    fat: 17,
+    fiber: 5,
+    confidence: 87,
+    tip: 'Pair it with greens or soup to make the plate more filling.',
   },
   {
-    id: 3,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="4" />
-      </svg>
-    ),
-    title: 'Tap the shutter',
-    body: 'Press the large white button to capture. The on-device ONNX model identifies the food — no internet needed.',
+    name: 'Fruit snack',
+    category: 'Fresh snack',
+    calories: 180,
+    protein: 2,
+    carbs: 44,
+    fat: 1,
+    fiber: 7,
+    confidence: 84,
+    tip: 'Great for quick energy. Add yogurt or nuts for longer satiety.',
   },
   {
-    id: 4,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <polyline points="16 16 12 12 8 16" />
-        <line x1="12" y1="12" x2="12" y2="21" />
-        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-      </svg>
-    ),
-    title: 'Or upload a photo',
-    body: 'Tap the gallery thumbnail in the bottom-left to pick an existing photo from your device.',
+    name: 'Pasta serving',
+    category: 'Carb-forward meal',
+    calories: 610,
+    protein: 18,
+    carbs: 82,
+    fat: 23,
+    fiber: 6,
+    confidence: 79,
+    tip: 'A smaller portion plus vegetables keeps the meal lighter.',
   },
 ]
 
-function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
-      <div className="modal">
-        <div className="modal-header">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="modal-logo">
-            <circle cx="11" cy="11" r="7" />
-            <line x1="16.5" y1="16.5" x2="22" y2="22" />
-          </svg>
-          <h2 id="onboard-title" className="modal-title">Welcome to NutriScan</h2>
-          <p className="modal-subtitle">
-            Point your camera at any food and the app will identify it — entirely on-device.
-          </p>
-        </div>
+const emptyStats = {
+  scans: 0,
+  averageCalories: 0,
+  protein: 0,
+}
 
-        <ol className="steps-list">
-          {steps.map((step) => (
-            <li key={step.id} className="step">
-              <div className="step-placeholder" aria-label={`Screenshot placeholder for step ${step.id}`}>
-                {step.icon}
-                <span className="step-placeholder-label">Add screenshot here</span>
-              </div>
-              <div className="step-body">
-                <strong className="step-title">{step.title}</strong>
-                <span className="step-desc">{step.body}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
+function readHistory(): ScanRecord[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    const parsed = raw ? JSON.parse(raw) as Array<Partial<ScanRecord> & { imageUrl?: string }> : []
+    return parsed
+      .map((item) => ({
+        ...item,
+        imageDataUrl: item.imageDataUrl ?? (item.imageUrl?.startsWith('data:') ? item.imageUrl : ''),
+      }))
+      .filter((item): item is ScanRecord => Boolean(
+        item.id &&
+        item.name &&
+        item.category &&
+        item.createdAt &&
+        item.imageDataUrl,
+      ))
+  } catch {
+    return []
+  }
+}
 
-        <button type="button" className="btn-primary" onClick={onDismiss}>
-          Get Started
-        </button>
-      </div>
-    </div>
-  )
+function hasSeenOnboarding() {
+  try {
+    return localStorage.getItem(ONBOARDING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function pickProfile(seed: number) {
+  return foodProfiles[Math.abs(seed) % foodProfiles.length]
+}
+
+function createRecord(imageDataUrl: string, source: ScanRecord['source'], seed: number): ScanRecord {
+  return {
+    ...pickProfile(seed),
+    id: crypto.randomUUID(),
+    source,
+    imageDataUrl,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+function loadImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Could not read the selected image.'))
+    image.src = URL.createObjectURL(file)
+  })
+}
+
+function imageToDataUrl(image: HTMLImageElement, maxSize = 900) {
+  const canvas = document.createElement('canvas')
+  const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight))
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Unable to prepare the photo buffer.')
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+  URL.revokeObjectURL(image.src)
+  return canvas.toDataURL('image/jpeg', 0.72)
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
 }
 
 function App() {
@@ -136,25 +165,58 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
+  const [screen, setScreen] = useState<Screen>('home')
   const [isCameraActive, setIsCameraActive] = useState(false)
-  const [latestImage, setLatestImage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [latestResult, setLatestResult] = useState<ScanRecord | null>(null)
+  const [history, setHistory] = useState<ScanRecord[]>(readHistory)
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding())
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [installMessage, setInstallMessage] = useState('')
+
+  const stats = useMemo(() => {
+    if (!history.length) return emptyStats
+    const calories = Math.round(history.reduce((sum, item) => sum + item.calories, 0) / history.length)
+    const protein = Math.round(history.reduce((sum, item) => sum + item.protein, 0))
+    return { scans: history.length, averageCalories: calories, protein }
+  }, [history])
+
+  const displayedResult = latestResult ?? history[0] ?? null
 
   useEffect(() => {
-    try {
-      if (!localStorage.getItem(ONBOARDING_KEY)) {
-        setShowOnboarding(true)
-      }
-    } catch (_) {
-      setShowOnboarding(true)
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as BeforeInstallPromptEvent)
+      setInstallMessage('Ready to install for offline use.')
+    }
+    const handleAppInstalled = () => {
+      setInstallPrompt(null)
+      setInstallMessage('NutriScan is installed.')
+    }
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
     }
   }, [])
 
-  function dismissOnboarding() {
-    setShowOnboarding(false)
-    try { localStorage.setItem(ONBOARDING_KEY, '1') } catch (_) {}
-  }
+  useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 12)))
+    } catch {
+      console.warn('NutriScan history could not be persisted.')
+    }
+  }, [history])
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -171,7 +233,7 @@ function App() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: CAMERA_CONFIG.facingMode },
+        video: { facingMode: 'environment' },
         audio: false,
       })
       streamRef.current = stream
@@ -188,27 +250,34 @@ function App() {
   }
 
   useEffect(() => {
-    startCamera()
-    return () => { stopCamera() }
-  }, [])
+    if (screen !== 'scan') return
 
-  const applyPreviewUrl = (nextUrl: string) => {
-    setLatestImage((currentUrl) => {
-      if (currentUrl) URL.revokeObjectURL(currentUrl)
-      return nextUrl
-    })
+    const startTimer = window.setTimeout(() => {
+      void startCamera()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(startTimer)
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    // Camera startup is intentionally tied only to entering the scan screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen])
+
+  const saveResult = (record: ScanRecord) => {
+    setLatestResult(record)
+    setHistory((items) => [record, ...items].slice(0, 20))
+    setScreen('home')
+    setErrorMessage('')
   }
 
   const capturePhoto = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
 
-    if (!video || !canvas) {
-      setErrorMessage('Camera capture is not ready yet.')
-      return
-    }
-    if (!video.videoWidth || !video.videoHeight) {
-      setErrorMessage('Wait for the camera feed to load before taking a photo.')
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      setErrorMessage('Start the camera and wait for the preview before scanning.')
       return
     }
 
@@ -221,104 +290,254 @@ function App() {
     }
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.72)
+    saveResult(createRecord(imageDataUrl, 'camera', Date.now()))
+  }
 
-    // ── TODO (when model is ready) ───────────────────────────────────────────
-    // Run ONNX inference on the canvas pixels to get the food name.
-    // See the integration guide at the top of this file for the full steps.
-    // setFoodLabel(label)   <-- uncomment once inference is wired up
-    //
-    // Features commented out until inference is ready:
-    //   - Nutrition card (calories, protein, carbs, fat)
-    //   - Confidence score chip
-    //   - Results panel / history list
-    // ─────────────────────────────────────────────────────────────────────────
+  const handleFilePick = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) { setErrorMessage('Could not save the captured photo.'); return }
-        applyPreviewUrl(URL.createObjectURL(blob))
-        setErrorMessage('')
-      },
-      'image/jpeg',
-      0.92,
+    try {
+      const image = await loadImage(file)
+      const imageDataUrl = imageToDataUrl(image)
+      saveResult(createRecord(imageDataUrl, 'upload', file.size + file.name.length))
+      event.target.value = ''
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Could not prepare the selected photo.',
+      )
+    }
+  }
+
+  const installApp = async () => {
+    if (!installPrompt) {
+      setInstallMessage('Already installed or waiting for the browser install prompt. Offline use works after one production load.')
+      return
+    }
+
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    setInstallPrompt(null)
+    setInstallMessage(
+      choice.outcome === 'accepted'
+        ? 'Install started. Offline shell is available after first load.'
+        : 'Install dismissed. You can try again later.',
     )
   }
 
-  const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    applyPreviewUrl(URL.createObjectURL(file))
-    setErrorMessage('')
-    event.target.value = ''
+  const dismissOnboarding = () => {
+    setShowOnboarding(false)
+    try {
+      localStorage.setItem(ONBOARDING_KEY, '1')
+    } catch {
+      // Local storage may be disabled; the app can still run.
+    }
+  }
+
+  const clearHistory = () => {
+    setHistory([])
+    setLatestResult(null)
   }
 
   return (
-    <>
-      {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
+    <main className="app-shell">
+      {showOnboarding && (
+        <section className="welcome-panel" aria-labelledby="welcome-title">
+          <div className="brand-mark" aria-hidden="true">N</div>
+          <div>
+            <p className="eyebrow">Offline-ready food companion</p>
+            <h1 id="welcome-title">Meet NutriScan</h1>
+            <p>
+              Capture or upload a meal, get an instant nutrition estimate, and keep
+              a private scan history on this device.
+            </p>
+          </div>
+          <button type="button" className="primary-action" onClick={dismissOnboarding}>
+            Start scanning
+          </button>
+        </section>
+      )}
 
-      <main className="camera-app" aria-label="Food camera app">
-        <section className="camera-stage" aria-label="Camera preview">
-          <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
+      <header className="topbar">
+        <button type="button" className="brand-button" onClick={() => setScreen('home')}>
+          <span className="brand-mark small" aria-hidden="true">N</span>
+          <span>
+            <strong>NutriScan</strong>
+            <small>{isOnline ? 'Online' : 'Offline mode'}</small>
+          </span>
+        </button>
 
-          {/* Centered viewfinder frame */}
-          <div className="viewfinder" aria-hidden="true">
-            <span className="vf-corner vf-tl" />
-            <span className="vf-corner vf-tr" />
-            <span className="vf-corner vf-bl" />
-            <span className="vf-corner vf-br" />
+        <button type="button" className="install-button" onClick={installApp}>
+          <span aria-hidden="true">↓</span>
+          Install
+        </button>
+      </header>
+
+      {installMessage && <p className="status-note">{installMessage}</p>}
+
+      {screen === 'home' && (
+        <section className="home-grid" aria-label="NutriScan dashboard">
+          <div className="hero-panel">
+            <p className="eyebrow">Smart meal check</p>
+            <h2>Scan food, understand the plate, keep moving.</h2>
+            <p>
+              This version uses local demo estimates until the ONNX model is connected,
+              so the flow is ready without needing a server or Wi-Fi.
+            </p>
+            <div className="hero-actions">
+              <button type="button" className="primary-action" onClick={() => setScreen('scan')}>
+                Scan food
+              </button>
+              <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+                Upload photo
+              </button>
+            </div>
           </div>
 
-          {!isCameraActive && (
-            <div className="camera-overlay">
-              <p>{CAMERA_CONFIG.overlayLabel}</p>
-            </div>
+          <div className="stats-strip" aria-label="Scan stats">
+            <article>
+              <strong>{stats.scans}</strong>
+              <span>Saved scans</span>
+            </article>
+            <article>
+              <strong>{stats.averageCalories}</strong>
+              <span>Avg calories</span>
+            </article>
+            <article>
+              <strong>{stats.protein}g</strong>
+              <span>Total protein</span>
+            </article>
+          </div>
+
+          {displayedResult ? (
+            <ResultCard result={displayedResult} />
+          ) : (
+            <section className="empty-result">
+              <h3>No meal scanned yet</h3>
+              <p>Take a photo or upload one to see calories, macros, confidence, and a practical eating tip.</p>
+            </section>
           )}
+        </section>
+      )}
 
-          {/* Bottom controls row */}
-          <div className="controls-row">
-            <button
-              type="button"
-              className="gallery-button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Open photos"
-            >
-              {latestImage ? (
-                <img className="gallery-thumb" src={latestImage} alt="Latest selected image" />
-              ) : (
-                <span className="gallery-fallback" aria-hidden="true" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              className="capture-button"
-              onClick={capturePhoto}
-              aria-label="Take photo"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 4.5 7.6 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.1L15 4.5H9Zm3 12.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
-              </svg>
-            </button>
-
-            {/* Spacer to balance gallery button on the right */}
-            <div className="controls-spacer" aria-hidden="true" />
+      {screen === 'scan' && (
+        <section className="scan-layout" aria-label="Food scanner">
+          <div className="camera-card">
+            <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
+            {!isCameraActive && (
+              <div className="camera-placeholder">
+                <span aria-hidden="true">⌾</span>
+                <h2>Camera is paused</h2>
+                <p>Use live camera when available, or open the device camera picker.</p>
+                <div className="camera-fallback-actions">
+                  <button type="button" className="primary-action" onClick={startCamera}>
+                    Start camera
+                  </button>
+                  <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+                    Take or upload photo
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="viewfinder" aria-hidden="true" />
           </div>
 
           {errorMessage && <p className="error-message">{errorMessage}</p>}
 
-          <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden-input"
-            onChange={handleFilePick}
-          />
+          <div className="scan-actions">
+            <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+              Upload
+            </button>
+            <button type="button" className="capture-action" onClick={capturePhoto}>
+              Scan
+            </button>
+            <button type="button" className="secondary-action" onClick={stopCamera}>
+              Pause
+            </button>
+          </div>
         </section>
-      </main>
-    </>
+      )}
+
+      {screen === 'history' && (
+        <section className="history-view" aria-label="Scan history">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Private log</p>
+              <h2>Recent scans</h2>
+            </div>
+            <button type="button" className="text-action" onClick={clearHistory}>
+              Clear
+            </button>
+          </div>
+
+          {history.length ? (
+            <div className="history-list">
+              {history.map((item) => (
+                <article className="history-item" key={item.id}>
+                  <img src={item.imageDataUrl} alt="" />
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{formatTime(item.createdAt)} · {item.calories} kcal · {item.protein}g protein</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <section className="empty-result">
+              <h3>No saved scans</h3>
+              <p>Your latest scans will appear here and remain stored locally on this device.</p>
+            </section>
+          )}
+        </section>
+      )}
+
+      <nav className="bottom-nav" aria-label="Main navigation">
+        <button type="button" className={screen === 'home' ? 'active' : ''} onClick={() => setScreen('home')}>
+          Home
+        </button>
+        <button type="button" className={screen === 'scan' ? 'active' : ''} onClick={() => setScreen('scan')}>
+          Scan
+        </button>
+        <button type="button" className={screen === 'history' ? 'active' : ''} onClick={() => setScreen('history')}>
+          History
+        </button>
+      </nav>
+
+      <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden-input"
+        onChange={handleFilePick}
+      />
+    </main>
+  )
+}
+
+function ResultCard({ result }: { result: ScanRecord }) {
+  return (
+    <section className="result-card" aria-label="Latest scan result">
+      <img src={result.imageDataUrl} alt="" />
+      <div className="result-content">
+        <div>
+          <p className="eyebrow">{result.category}</p>
+          <h2>{result.name}</h2>
+          <span className="confidence">{result.confidence}% match</span>
+        </div>
+
+        <div className="macro-grid">
+          <span><strong>{result.calories}</strong> kcal</span>
+          <span><strong>{result.protein}g</strong> protein</span>
+          <span><strong>{result.carbs}g</strong> carbs</span>
+          <span><strong>{result.fat}g</strong> fat</span>
+        </div>
+
+        <p className="tip">{result.tip}</p>
+      </div>
+    </section>
   )
 }
 
