@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// https://vite.dev/config/
 export default defineConfig({
   server: {
     host: true,
@@ -21,8 +22,8 @@ export default defineConfig({
         name: 'NutriScan Food Scanner',
         short_name: 'NutriScan',
         description: 'Scan meals, estimate nutrition, and keep a private offline food history.',
-        theme_color: '#020617',
-        background_color: '#020617',
+        theme_color: '#063d24',
+        background_color: '#dcefd8',
         display: 'standalone',
         start_url: '/',
         scope: '/',

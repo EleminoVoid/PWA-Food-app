@@ -17,14 +17,17 @@ async function registerOfflineApp() {
 
   const refreshWhenOnline = async () => {
     if (!navigator.onLine || onlineRefreshInProgress) return
+
     onlineRefreshInProgress = true
     try {
       const registration = await navigator.serviceWorker.getRegistration('/')
       await registration?.update()
+
       if (registration?.waiting) {
         registration.waiting.postMessage({ type: 'SKIP_WAITING' })
         return
       }
+
       window.location.reload()
     } catch (error) {
       onlineRefreshInProgress = false
@@ -36,7 +39,6 @@ async function registerOfflineApp() {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
     const readyRegistration = await navigator.serviceWorker.ready
     readyRegistration.active?.postMessage({ type: 'WARM_CACHE' })
-
     window.addEventListener('online', () => {
       void refreshWhenOnline()
       readyRegistration.active?.postMessage({ type: 'WARM_CACHE' })
@@ -49,6 +51,7 @@ async function registerOfflineApp() {
     registration.addEventListener('updatefound', () => {
       const worker = registration.installing
       if (!worker) return
+
       worker.addEventListener('statechange', () => {
         if (worker.state === 'installed' && navigator.serviceWorker.controller) {
           worker.postMessage({ type: 'SKIP_WAITING' })

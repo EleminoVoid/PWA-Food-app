@@ -57,6 +57,25 @@ npm run build
 
 This produces the static web output in `dist/`, which is what Capacitor uses.
 
+## Install And Use Offline
+
+The installable PWA only works correctly from the production build:
+
+```bash
+npm run build
+npm run preview
+```
+
+Open the preview URL, usually `http://localhost:4173`, then install NutriScan from the browser install button or browser menu.
+
+Do not install from `npm run dev` / `http://localhost:5173` when testing offline cold starts. Install from `npm run preview` after `npm run build`, because that is the version that contains the production service worker and complete offline cache.
+
+Important offline rule: install from the production preview, then open the installed app once while you are online so the service worker can cache the latest app shell. After that, you can close Chrome, close the installed app, stop the local server, turn off Wi-Fi, reopen the installed app, navigate Home/Scan/History, scan or upload photos, and save history locally on the device.
+
+Camera note: live camera access requires a secure origin. `localhost` works on the same computer. If you test from a phone using a LAN URL like `http://192.168.x.x:4173`, the browser may block live camera access because it is not HTTPS. In that case, use the **Take or upload photo** fallback or serve the app over HTTPS.
+
+When the installed app comes back online, it checks for a newer service worker and refreshes automatically. If it still shows old content after reconnecting, uninstall the app, clear the site data for the preview URL, run `npm run build`, and install it again.
+
 ## 4. Sync The Web Build To Android
 
 After building, copy the latest web assets into the Android project:

@@ -2,14 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content="Identify any food instantly with your camera — entirely on-device." />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#020617" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="NutriScan helps you scan meals, review nutrition estimates, and keep a private offline food history." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#063d24" />
     <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
     <title>NutriScan</title>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function (error) {
+          console.warn('NutriScan service worker registration failed.', error)
+        })
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
