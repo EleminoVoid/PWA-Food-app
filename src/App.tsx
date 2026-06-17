@@ -4,45 +4,26 @@ import './App.css'
 
 /* ── ONNX Integration Guide (uncomment when ready to wire in the model) ────────
  *
- * 1. Install the runtime:
- *      pnpm add onnxruntime-web
+ * 1. Install:        npm install onnxruntime-web
+ * 2. Serve model at: public/models/food_classifier.onnx
+ * 3. Session once:   const session = await ort.InferenceSession.create('/models/food_classifier.onnx')
+ * 4. Pre-process:    draw to 224×224 canvas → CHW Float32Array [1,3,224,224] tensor
+ * 5. Run:            const { output } = await session.run({ input: tensor })
+ * 6. Top-1 label:    LABELS[scores.indexOf(Math.max(...scores))]
  *
- * 2. Serve the model from:
- *      public/models/food_classifier.onnx
- *
- * 3. Create the session once at module scope:
- *      import * as ort from 'onnxruntime-web'
- *      const sessionPromise = ort.InferenceSession.create('/models/food_classifier.onnx')
- *
- * 4. Pre-process — draw to 224×224, extract CHW Float32Array:
- *      const { data } = ctx.getImageData(0, 0, 224, 224)
- *      const float32 = new Float32Array(3 * 224 * 224)
- *      for (let i = 0; i < 224 * 224; i++) {
- *        float32[i]             = data[i*4]   / 255   // R
- *        float32[i + 224*224]   = data[i*4+1] / 255   // G
- *        float32[i + 224*224*2] = data[i*4+2] / 255   // B
- *      }
- *      const tensor = new ort.Tensor('float32', float32, [1, 3, 224, 224])
- *
- * 5. Run and get top-1 label:
- *      const session = await sessionPromise
- *      const { output } = await session.run({ input: tensor })
- *      const scores = Array.from(output.data as Float32Array)
- *      const topIdx = scores.indexOf(Math.max(...scores))
- *      const label  = LABELS[topIdx]   // string array of class names
- *
- * 6. Display the label — currently the app only shows the food name.
- *    Nutrition lookup and results card are commented out until the model is ready.
+ * Wire it into confirmPhoto() below — that is the single gated call point.
+ * Nutrition card, confidence chip, and results panel are commented out until ready.
  * ────────────────────────────────────────────────────────────────────────────── */
 
 const CAMERA_CONFIG = {
   facingMode: 'environment' as const,
-  overlayLabel: 'Tap to capture',
 }
 
 const ONBOARDING_KEY = 'nutriscan_onboarded'
 
-const steps = [
+type ScanEntry = { url: string; timestamp: string }
+
+const STEPS = [
   {
     id: 1,
     icon: (
@@ -76,7 +57,7 @@ const steps = [
       </svg>
     ),
     title: 'Tap the shutter',
-    body: 'Press the large white button to capture. The on-device ONNX model identifies the food — no internet needed.',
+    body: 'Press the large white button to capture. Review the photo and confirm or retake before it is saved.',
   },
   {
     id: 4,
@@ -88,7 +69,7 @@ const steps = [
       </svg>
     ),
     title: 'Or upload a photo',
-    body: 'Tap the gallery thumbnail in the bottom-left to pick an existing photo from your device.',
+    body: 'Tap the gallery button in the bottom-left to pick an existing photo from your device.',
   },
 ]
 
@@ -108,7 +89,7 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
         </div>
 
         <ol className="steps-list">
-          {steps.map((step) => (
+          {STEPS.map((step) => (
             <li key={step.id} className="step">
               <div className="step-placeholder" aria-label={`Screenshot placeholder for step ${step.id}`}>
                 {step.icon}
@@ -135,36 +116,35 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  // Tracks whether the file picker is open so we can detect dismissal without a pick
+  const pickerOpenRef = useRef(false)
 
   const [isCameraActive, setIsCameraActive] = useState(false)
-  // pendingImage: the photo the user just took — held until they confirm or retake
-  const [pendingImage, setPendingImage] = useState<string>('')
+  // pendingImage: photo held for user review before it is committed
+  const [pendingImage, setPendingImage] = useState('')
   const [latestImage, setLatestImage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  // scanHistory: confirmed photos — food label added once ONNX is wired in
-  const [scanHistory, setScanHistory] = useState<{ url: string; timestamp: string }[]>([])
-  // pickerOpen tracks whether the file picker is currently open to detect dismissal
-  const pickerOpenRef = useRef(false)
+  const [scanHistory, setScanHistory] = useState<ScanEntry[]>([])
 
+  // ── Onboarding ────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
-      if (!localStorage.getItem(ONBOARDING_KEY)) {
-        setShowOnboarding(true)
-      }
-    } catch (_) {
+      if (!localStorage.getItem(ONBOARDING_KEY)) setShowOnboarding(true)
+    } catch {
       setShowOnboarding(true)
     }
   }, [])
 
-  function dismissOnboarding() {
+  const dismissOnboarding = () => {
     setShowOnboarding(false)
-    try { localStorage.setItem(ONBOARDING_KEY, '1') } catch (_) {}
+    try { localStorage.setItem(ONBOARDING_KEY, '1') } catch { /* ignore */ }
   }
 
+  // ── Camera ────────────────────────────────────────────────────────────────
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     setIsCameraActive(false)
   }
@@ -172,10 +152,8 @@ function App() {
   const startCamera = async () => {
     const video = videoRef.current
     if (!video) return
-
     setErrorMessage('')
     stopCamera()
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: CAMERA_CONFIG.facingMode },
@@ -185,72 +163,35 @@ function App() {
       video.srcObject = stream
       await video.play()
       setIsCameraActive(true)
-    } catch (error) {
+    } catch (err) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Camera access failed. Check permissions and try again.',
+        err instanceof Error ? err.message : 'Camera access failed. Check permissions and try again.',
       )
     }
   }
 
   useEffect(() => {
     startCamera()
-    return () => { stopCamera() }
+    return () => stopCamera()
   }, [])
 
-  const applyPreviewUrl = (nextUrl: string) => {
-    setLatestImage((currentUrl) => {
-      if (currentUrl) URL.revokeObjectURL(currentUrl)
-      return nextUrl
-    })
-  }
-
-  const openGallery = () => {
-    pickerOpenRef.current = true
-    setErrorMessage('')
-
-    const handleFocusReturn = () => {
-      setTimeout(() => {
-        if (pickerOpenRef.current) {
-          setErrorMessage('No image selected. Please allow access and pick a photo to analyse it.')
-          pickerOpenRef.current = false
-        }
-      }, 600)
-      window.removeEventListener('focus', handleFocusReturn)
-    }
-    window.addEventListener('focus', handleFocusReturn)
-
-    fileInputRef.current?.click()
-  }
-
+  // ── Photo capture ─────────────────────────────────────────────────────────
   const capturePhoto = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
-
-    if (!video || !canvas) {
-      setErrorMessage('Camera capture is not ready yet.')
-      return
-    }
+    if (!video || !canvas) { setErrorMessage('Camera is not ready yet.'); return }
     if (!video.videoWidth || !video.videoHeight) {
-      setErrorMessage('Wait for the camera feed to load before taking a photo.')
+      setErrorMessage('Wait for the camera feed to load before capturing.')
       return
     }
-
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
-    const context = canvas.getContext('2d')
-    if (!context) {
-      setErrorMessage('Unable to prepare the photo buffer.')
-      return
-    }
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { setErrorMessage('Unable to prepare the photo buffer.'); return }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     canvas.toBlob(
       (blob) => {
         if (!blob) { setErrorMessage('Could not save the captured photo.'); return }
-        // Hold the image — don't commit until the user confirms
         setPendingImage(URL.createObjectURL(blob))
         setErrorMessage('')
       },
@@ -265,46 +206,56 @@ function App() {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     })
     setScanHistory((prev) => [{ url: pendingImage, timestamp }, ...prev])
-    applyPreviewUrl(pendingImage)
+    setLatestImage((prev) => { if (prev) URL.revokeObjectURL(prev); return pendingImage })
     setPendingImage('')
-    // ── TODO (when model is ready) ───────────────────────────────────────────
-    // Run ONNX inference on the canvas pixels to get the food name.
-    // See the integration guide at the top of this file for the full steps.
-    // setFoodLabel(label)   <-- uncomment once inference is wired up
-    //
-    // Features commented out until inference is ready:
-    //   - Nutrition card (calories, protein, carbs, fat)
-    //   - Confidence score chip
-    //   - Results panel / history list
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── TODO: run ONNX inference here (see guide at the top of the file) ────
+    // setFoodLabel(label)
+    // Nutrition card, confidence chip, results panel → uncomment when ready
   }
 
   const retakePhoto = () => {
-    if (pendingImage) {
-      URL.revokeObjectURL(pendingImage)
-      setPendingImage('')
+    if (pendingImage) URL.revokeObjectURL(pendingImage)
+    setPendingImage('')
+    setErrorMessage('')
+  }
+
+  // ── Gallery upload ────────────────────────────────────────────────────────
+  const openGallery = () => {
+    pickerOpenRef.current = true
+    setErrorMessage('')
+    const handleFocus = () => {
+      setTimeout(() => {
+        if (pickerOpenRef.current) {
+          setErrorMessage('No image selected. Please allow access and pick a photo to analyse it.')
+          pickerOpenRef.current = false
+        }
+      }, 600)
+      window.removeEventListener('focus', handleFocus)
     }
-    setErrorMessage('')
+    window.addEventListener('focus', handleFocus)
+    fileInputRef.current?.click()
   }
 
-  const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+  const handleFilePick = (e: ChangeEvent<HTMLInputElement>) => {
     pickerOpenRef.current = false
+    const file = e.target.files?.[0]
     if (!file) return
-    applyPreviewUrl(URL.createObjectURL(file))
+    setLatestImage((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file) })
     setErrorMessage('')
-    event.target.value = ''
+    e.target.value = ''
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
 
-      <main className="camera-app" aria-label="Food camera app">
+      <main className="camera-app" aria-label="NutriScan food camera">
         <section className="camera-stage" aria-label="Camera preview">
+
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
 
-          {/* Top-right history button */}
+          {/* History button — top right */}
           <button
             type="button"
             className="history-button"
@@ -312,13 +263,13 @@ function App() {
             aria-label="View scan history"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" className="history-icon">
-              <path d="M12 8v4l3 3" />
-              <path d="M3.05 11a9 9 0 1 1 .5 4" />
-              <polyline points="3 16 3 11 8 11" />
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 .49-5" />
+              <polyline points="12 7 12 12 15 15" />
             </svg>
           </button>
 
-          {/* Centered viewfinder frame */}
+          {/* Viewfinder frame */}
           <div className="viewfinder" aria-hidden="true">
             <span className="vf-corner vf-tl" />
             <span className="vf-corner vf-tr" />
@@ -328,14 +279,22 @@ function App() {
 
           {!isCameraActive && (
             <div className="camera-overlay">
-              <p>{CAMERA_CONFIG.overlayLabel}</p>
+              <p>Camera loading&hellip;</p>
             </div>
           )}
 
-          {/* Pending photo preview — held until user confirms or retakes */}
+          {errorMessage && (
+            <p className="error-message" role="alert">{errorMessage}</p>
+          )}
+
+          {/* Pending review overlay */}
           {pendingImage && (
             <div className="pending-overlay" aria-live="polite">
-              <img className="pending-preview" src={pendingImage} alt="Captured photo awaiting confirmation" />
+              <img
+                className="pending-preview"
+                src={pendingImage}
+                alt="Captured photo awaiting confirmation"
+              />
               <div className="pending-actions">
                 <button type="button" className="btn-retake" onClick={retakePhoto}>
                   Retake
@@ -347,7 +306,7 @@ function App() {
             </div>
           )}
 
-          {/* Bottom controls row — hidden while reviewing a pending photo */}
+          {/* Bottom controls — hidden during review */}
           {!pendingImage && (
             <div className="controls-row">
               <button
@@ -378,15 +337,11 @@ function App() {
                 </svg>
               </button>
 
-              {/* Spacer to keep shutter centered */}
               <div className="controls-spacer" aria-hidden="true" />
             </div>
           )}
 
-          {errorMessage && <p className="error-message">{errorMessage}</p>}
-
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
-
           {/* No capture="environment" — opens gallery on mobile, file picker on desktop */}
           <input
             ref={fileInputRef}
@@ -399,12 +354,7 @@ function App() {
 
         {/* History panel */}
         {showHistory && (
-          <div
-            className="history-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Scan history"
-          >
+          <div className="history-panel" role="dialog" aria-modal="true" aria-label="Scan history">
             <div className="history-header">
               <h2 className="history-title">History</h2>
               <button
@@ -426,16 +376,10 @@ function App() {
               <ul className="history-list">
                 {scanHistory.map((item, i) => (
                   <li key={i} className="history-item">
-                    <img
-                      src={item.url}
-                      alt={`Scan from ${item.timestamp}`}
-                      className="history-thumb"
-                    />
+                    <img src={item.url} alt={`Scan from ${item.timestamp}`} className="history-thumb" />
                     <div className="history-meta">
-                      <span className="history-label">
-                        {/* Food name will appear here once ONNX is wired in */}
-                        Unidentified food
-                      </span>
+                      {/* Food name replaces this placeholder once ONNX is wired in */}
+                      <span className="history-label">Unidentified food</span>
                       <span className="history-time">{item.timestamp}</span>
                     </div>
                   </li>
