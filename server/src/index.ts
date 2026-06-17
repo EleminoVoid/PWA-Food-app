@@ -50,7 +50,7 @@ app.post('/api/echo', (request, response) => {
 })
 
 app.post('/api/identify-food', upload.single('image'), (request, response) => {
-  const file = (request as any).file
+  const file = request.file
   if (!file) return response.status(400).json({ error: 'No image uploaded' })
 
   // Placeholder processing: in a real app send `file.buffer` to a vision model or cloud API
