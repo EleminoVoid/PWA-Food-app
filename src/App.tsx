@@ -225,23 +225,49 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
 
 // ── Result card (shown in history panel) ─────────────────────────────────────
 
-function ResultCard({ result }: { result: ScanRecord }) {
+function MacroGrid({ record }: { record: ScanRecord }) {
+  return (
+    <div className="macro-grid">
+      <div className="macro-item macro-cal">
+        <span className="macro-value">{record.calories}</span>
+        <span className="macro-label">kcal</span>
+      </div>
+      <div className="macro-item">
+        <span className="macro-value">{record.protein}g</span>
+        <span className="macro-label">protein</span>
+      </div>
+      <div className="macro-item">
+        <span className="macro-value">{record.carbs}g</span>
+        <span className="macro-label">carbs</span>
+      </div>
+      <div className="macro-item">
+        <span className="macro-value">{record.fat}g</span>
+        <span className="macro-label">fat</span>
+      </div>
+      <div className="macro-item">
+        <span className="macro-value">{record.fiber}g</span>
+        <span className="macro-label">fiber</span>
+      </div>
+      <div className="macro-item">
+        <span className="macro-value">{record.confidence}%</span>
+        <span className="macro-label">match</span>
+      </div>
+    </div>
+  )
+}
+
+function ResultCard({ record }: { record: ScanRecord }) {
   return (
     <div className="result-card">
-      <img src={result.imageDataUrl} alt="" className="result-thumb" />
+      <img src={record.imageDataUrl} alt="" className="result-thumb" />
       <div className="result-body">
-        <span className="result-category">{result.category}</span>
-        <strong className="result-name">{result.name}</strong>
-        {/* Macro grid — uncomment when ONNX is wired in */}
-        {/*
-        <div className="result-macros">
-          <span><strong>{result.calories}</strong> kcal</span>
-          <span><strong>{result.protein}g</strong> protein</span>
-          <span><strong>{result.carbs}g</strong> carbs</span>
-          <span><strong>{result.fat}g</strong> fat</span>
+        <span className="result-category">{record.category}</span>
+        <strong className="result-name">{record.name}</strong>
+        <div className="result-mini-macros">
+          <span>{record.calories} kcal</span>
+          <span>{record.protein}g protein</span>
+          <span>{record.carbs}g carbs</span>
         </div>
-        <p className="result-tip">{result.tip}</p>
-        */}
       </div>
     </div>
   )
@@ -259,6 +285,7 @@ function App() {
 
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [pendingImage, setPendingImage] = useState('')
+  const [resultRecord, setResultRecord] = useState<ScanRecord | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding())
   const [showHistory, setShowHistory] = useState(false)
@@ -362,12 +389,19 @@ function App() {
   const confirmPhoto = (source: ScanRecord['source'] = 'camera') => {
     if (!pendingImage) return
     const record = createRecord(pendingImage, source, Date.now())
-    setScanHistory((prev) => [record, ...prev])
+    // Show the result screen first — user saves to history from there
+    setResultRecord(record)
     setPendingImage('')
-    // ── TODO: run ONNX inference here (see guide at the top of the file) ────
-    // setFoodLabel(label)
-    // Nutrition card, confidence chip, results panel → uncomment when ready
+    // ── TODO: replace createRecord() with ONNX inference output here ─────────
   }
+
+  const saveResult = () => {
+    if (!resultRecord) return
+    setScanHistory((prev) => [resultRecord, ...prev])
+    setResultRecord(null)
+  }
+
+  const discardResult = () => setResultRecord(null)
 
   const retakePhoto = () => {
     setPendingImage('')
@@ -400,7 +434,8 @@ function App() {
       const img = await loadImage(file)
       const dataUrl = imageToDataUrl(img)
       const record = createRecord(dataUrl, 'upload', file.size + file.name.length)
-      setScanHistory((prev) => [record, ...prev])
+      // Show result screen — user saves to history from there
+      setResultRecord(record)
       setErrorMessage('')
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Could not prepare the selected photo.')
@@ -510,8 +545,43 @@ function App() {
             </div>
           )}
 
-          {/* Bottom controls — hidden during review */}
-          {!pendingImage && (
+          {/* Result overlay — shown after confirming a photo */}
+          {resultRecord && (
+            <div className="result-overlay" role="dialog" aria-label="Scan result">
+              <img
+                src={resultRecord.imageDataUrl}
+                alt="Scanned food"
+                className="result-bg-image"
+              />
+              <div className="result-sheet">
+                <div className="result-sheet-header">
+                  <div>
+                    <p className="result-sheet-category">{resultRecord.category}</p>
+                    <h2 className="result-sheet-name">{resultRecord.name}</h2>
+                  </div>
+                  <span className="result-confidence-chip">{resultRecord.confidence}% match</span>
+                </div>
+
+                <MacroGrid record={resultRecord} />
+
+                {resultRecord.tip && (
+                  <p className="result-tip">{resultRecord.tip}</p>
+                )}
+
+                <div className="result-sheet-actions">
+                  <button type="button" className="btn-retake" onClick={discardResult}>
+                    Discard
+                  </button>
+                  <button type="button" className="btn-use" onClick={saveResult}>
+                    Save to History
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom controls — hidden during review or result */}
+          {!pendingImage && !resultRecord && (
             <div className="controls-row">
               <button
                 type="button"
@@ -591,7 +661,7 @@ function App() {
               <ul className="history-list">
                 {scanHistory.map((item) => (
                   <li key={item.id} className="history-item">
-                    <ResultCard result={item} />
+                    <ResultCard record={item} />
                     <span className="history-time">{formatTime(item.createdAt)}</span>
                   </li>
                 ))}

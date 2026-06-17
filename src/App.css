@@ -549,7 +549,142 @@ input {
 
 .history-clear:active { opacity: 0.7; }
 
-/* ── Result card (in history list) ─────────────────────────────────────────── */
+/* ── Result overlay (full-screen after confirm) ─────────────────────────────── */
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-bg-image {
+  flex: 1 1 0;
+  width: 100%;
+  object-fit: cover;
+  display: block;
+  min-height: 0;
+}
+
+.result-sheet {
+  flex: 0 0 auto;
+  background: #0a1120;
+  border-top: 1px solid rgba(226, 232, 240, 0.08);
+  padding: 1.25rem 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.result-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.result-sheet-category {
+  margin: 0 0 2px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #67e8f9;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.result-sheet-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f1f5f9;
+}
+
+.result-confidence-chip {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(103, 232, 249, 0.12);
+  border: 1px solid rgba(103, 232, 249, 0.25);
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── Macro grid ─────────────────────────────────────────────────────────────── */
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.macro-item {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(226, 232, 240, 0.08);
+  border-radius: 12px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.macro-item.macro-cal {
+  border-color: rgba(103, 232, 249, 0.2);
+  background: rgba(103, 232, 249, 0.07);
+}
+
+.macro-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.1;
+}
+
+.macro-item.macro-cal .macro-value {
+  color: #67e8f9;
+}
+
+.macro-label {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Result tip ─────────────────────────────────────────────────────────────── */
+.result-tip {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border-left: 2px solid #67e8f9;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.result-sheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── History result card mini-macros ────────────────────────────────────────── */
+.result-mini-macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 2px;
+}
+
+.result-mini-macros span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* ── Result card (history list) ─────────────────────────────────────────────── */
 .result-card {
   display: flex;
   align-items: center;
