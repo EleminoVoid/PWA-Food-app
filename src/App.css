@@ -1282,27 +1282,112 @@ button {
   color: #fca5a5;
 }
 
-/* ── install-button override ──────────────────────────────────────────────── */
-.topbar-overlay .install-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.45);
-  backdrop-filter: blur(8px);
-  color: #e2e8f0;
+/* ── Menu bar ─────────────────────────────────────────────────────────────── */
+.menu-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  align-items: stretch;
+  background: rgba(8, 16, 30, 0.92);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(226, 232, 240, 0.08);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.topbar-overlay .install-button svg {
-  width: 18px;
-  height: 18px;
+.menu-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 58px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s;
+}
+
+.menu-tab--active {
+  color: #67e8f9;
+}
+
+.menu-tab--install {
+  color: #94a3b8;
+}
+
+.menu-tab--active .menu-icon {
+  stroke: #67e8f9;
+}
+
+.menu-icon {
+  width: 22px;
+  height: 22px;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
+  flex-shrink: 0;
+}
+
+/* Camera icon is filled, not stroked */
+.menu-tab:first-child .menu-icon {
+  fill: currentColor;
+  stroke: none;
+}
+
+.menu-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.menu-badge {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 18px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ── Model chips row ──────────────────────────────────────────────────────── */
+.model-chips-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Adjust model picker and controls bottom offset for menu bar ─────────── */
+.model-picker-bar {
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.controls-row {
+  padding-bottom: calc(68px + env(safe-area-inset-bottom));
+}
+
+/* ── History panel full height (minus menu bar) ───────────────────────────── */
+.history-panel {
+  bottom: calc(58px + env(safe-area-inset-bottom));
 }

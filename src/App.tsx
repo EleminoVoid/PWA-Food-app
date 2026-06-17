@@ -23,6 +23,8 @@ type ScanRecord = {
   result: SegmentResult
 }
 
+type Tab = 'scan' | 'history'
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const HISTORY_KEY = 'nutriscan_segmentation_history'
@@ -112,6 +114,13 @@ function hasSeenOnboarding() {
   try { return localStorage.getItem(ONBOARDING_KEY) === '1' } catch { return false }
 }
 
+function isRunningAsPwa() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -132,6 +141,10 @@ function fileToDataUrl(file: File): Promise<string> {
 
 function formatScorePercent(score: number) {
   return `${(score * 100).toFixed(1)}%`
+}
+
+function labelToDisplay(label: string) {
+  return label.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -156,7 +169,6 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
             <li key={step.id} className="step">
               <div className="step-placeholder">
                 {step.icon}
-                <span className="step-placeholder-label">Add screenshot here</span>
               </div>
               <div className="step-body">
                 <strong className="step-title">{step.title}</strong>
@@ -181,13 +193,13 @@ function DetectionList({ result }: { result: SegmentResult }) {
     <div className="detection-list">
       {sorted.map((det, i) => (
         <div key={i} className="detection-row">
-          <span className="detection-label">{det.label}</span>
-          <span className="detection-score">{formatScorePercent(det.score)}</span>
           <div
             className="detection-bar"
             style={{ width: `${(det.score * 100).toFixed(1)}%` }}
             aria-hidden="true"
           />
+          <span className="detection-label">{labelToDisplay(det.label)}</span>
+          <span className="detection-score">{formatScorePercent(det.score)}</span>
         </div>
       ))}
     </div>
@@ -203,7 +215,7 @@ function HistoryCard({ record }: { record: ScanRecord }) {
     <div className="history-item">
       <img src={record.overlayDataUrl} alt="Scan overlay" className="history-thumb" />
       <div className="history-meta">
-        <span className="history-label">{top?.label ?? 'Unknown food'}</span>
+        <span className="history-label">{top ? labelToDisplay(top.label) : 'Unknown food'}</span>
         <span className="history-sublabel">
           {record.result.detections.length} detection{record.result.detections.length !== 1 ? 's' : ''} &middot; {record.result.modelLabel}
         </span>
@@ -223,15 +235,16 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const pickerOpenRef = useRef(false)
 
+  const [activeTab, setActiveTab] = useState<Tab>('scan')
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [resultRecord, setResultRecord] = useState<ScanRecord | null>(null)
-  const [showHistory, setShowHistory] = useState(false)
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>(() => readHistory())
   const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding())
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isPwa] = useState(() => isRunningAsPwa())
   const [selectedModel, setSelectedModel] = useState<ModelId>(() => readSelectedModel())
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.35)
   const [iouThreshold] = useState(0.5)
@@ -241,7 +254,6 @@ function App() {
   const stats = useMemo(() => ({
     scans: scanHistory.length,
     detections: scanHistory.reduce((sum, r) => sum + r.result.detections.length, 0),
-    modelsUsed: new Set(scanHistory.map((r) => r.result.modelId)).size,
   }), [scanHistory])
 
   // Persist history
@@ -261,8 +273,9 @@ function App() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
-  // Install prompt
+  // Install prompt — don't show if already running as PWA
   useEffect(() => {
+    if (isPwa) return
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as BeforeInstallPromptEvent) }
     const installed = () => setInstallPrompt(null)
     window.addEventListener('beforeinstallprompt', handler)
@@ -271,7 +284,7 @@ function App() {
       window.removeEventListener('beforeinstallprompt', handler)
       window.removeEventListener('appinstalled', installed)
     }
-  }, [])
+  }, [isPwa])
 
   // Camera
   const stopCamera = useCallback(() => {
@@ -301,13 +314,24 @@ function App() {
     }
   }, [stopCamera])
 
+  // Start camera on mount and warm models
   useEffect(() => {
     startCamera()
     warmSegmentationModels().catch(() => { /* warm silently */ })
     return () => stopCamera()
   }, [startCamera, stopCamera])
 
-  // Analyze
+  // Stop/resume camera when switching tabs
+  useEffect(() => {
+    if (activeTab === 'scan') {
+      if (!isCameraActive) startCamera()
+    } else {
+      stopCamera()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
+  // Analyze image
   const analyzeImage = useCallback(async (dataUrl: string, source: ScanRecord['source']) => {
     setIsAnalyzing(true)
     setErrorMessage('')
@@ -318,7 +342,6 @@ function App() {
         iouThreshold,
       })
 
-      // Draw segmentation overlay onto a canvas
       const oc = overlayCanvasRef.current ?? document.createElement('canvas')
       drawSegmentationOverlay(oc, input, result.detections)
       const overlayDataUrl = oc.toDataURL('image/jpeg', 0.82)
@@ -360,7 +383,6 @@ function App() {
     const handleFocus = () => {
       setTimeout(() => {
         if (pickerOpenRef.current) {
-          setErrorMessage('No image selected. Please allow access and pick a photo.')
           pickerOpenRef.current = false
         }
       }, 600)
@@ -409,44 +431,23 @@ function App() {
       {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
 
       <main className="camera-app" aria-label="NutriScan food scanner">
-        <section className="camera-stage" aria-label="Camera preview">
+
+        {/* ── Scan tab ── */}
+        <section
+          className="camera-stage"
+          aria-label="Camera preview"
+          aria-hidden={activeTab !== 'scan'}
+          style={{ display: activeTab === 'scan' ? undefined : 'none' }}
+        >
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
           <canvas ref={overlayCanvasRef} className="hidden-canvas" aria-hidden="true" />
 
-          {/* Top bar */}
+          {/* Status pill */}
           <div className="topbar-overlay">
             <div className="status-pill">
               <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
               <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
-            </div>
-            <div className="topbar-right">
-              {installPrompt && (
-                <button type="button" className="install-button" onClick={handleInstall} aria-label="Install app">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                </button>
-              )}
-              <button
-                type="button"
-                className="history-button"
-                onClick={() => setShowHistory(true)}
-                aria-label="View scan history"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="history-icon">
-                  <path d="M12 8v4l3 3" />
-                  <path d="M3.05 11a9 9 0 1 1 .5 4" />
-                  <polyline points="3 16 3 11 8 11" />
-                </svg>
-                {scanHistory.length > 0 && (
-                  <span className="history-badge" aria-label={`${scanHistory.length} saved scans`}>
-                    {scanHistory.length > 99 ? '99+' : scanHistory.length}
-                  </span>
-                )}
-              </button>
             </div>
           </div>
 
@@ -458,7 +459,7 @@ function App() {
             <span className="vf-corner vf-br" />
           </div>
 
-          {/* Camera paused placeholder */}
+          {/* Camera paused */}
           {!isCameraActive && !isAnalyzing && !resultRecord && (
             <div className="camera-overlay">
               <p>Camera paused &mdash; tap the shutter to retry</p>
@@ -481,16 +482,18 @@ function App() {
           {/* Model picker — idle only */}
           {!resultRecord && !isAnalyzing && (
             <div className="model-picker-bar">
-              {MODEL_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`model-chip ${selectedModel === opt.id ? 'model-chip--active' : ''}`}
-                  onClick={() => setSelectedModel(opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              <div className="model-chips-row">
+                {MODEL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`model-chip${selectedModel === opt.id ? ' model-chip--active' : ''}`}
+                    onClick={() => setSelectedModel(opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <div className="confidence-row">
                 <label htmlFor="conf-slider" className="conf-label">
                   Confidence&nbsp;<span className="conf-value">{(confidenceThreshold * 100).toFixed(0)}%</span>
@@ -523,7 +526,7 @@ function App() {
                     <p className="result-sheet-category">{resultRecord.result.modelLabel}</p>
                     <h2 className="result-sheet-name">
                       {resultRecord.result.detections.length > 0
-                        ? resultRecord.result.detections.reduce((b, d) => d.score > b.score ? d : b).label
+                        ? labelToDisplay(resultRecord.result.detections.reduce((b, d) => d.score > b.score ? d : b).label)
                         : 'No food detected'}
                     </h2>
                   </div>
@@ -550,7 +553,7 @@ function App() {
             </div>
           )}
 
-          {/* Bottom controls */}
+          {/* Bottom capture controls */}
           {!resultRecord && (
             <div className="controls-row">
               <button
@@ -596,42 +599,29 @@ function App() {
           />
         </section>
 
-        {/* History panel */}
-        {showHistory && (
-          <div className="history-panel" role="dialog" aria-modal="true" aria-label="Scan history">
+        {/* ── History tab ── */}
+        {activeTab === 'history' && (
+          <section className="history-panel" aria-label="Scan history">
             <div className="history-header">
               <div>
-                <h2 className="history-title">History</h2>
+                <h2 className="history-title">Scan History</h2>
                 <p className="history-subtitle">
-                  {stats.scans} scan{stats.scans !== 1 ? 's' : ''} &middot; {stats.detections} detections
+                  {stats.scans} scan{stats.scans !== 1 ? 's' : ''} &middot; {stats.detections} detection{stats.detections !== 1 ? 's' : ''}
                 </p>
               </div>
-              <div className="history-header-actions">
-                {scanHistory.length > 0 && (
-                  <button
-                    type="button"
-                    className="history-clear"
-                    onClick={() => { setScanHistory([]); saveHistory([]) }}
-                  >
-                    Clear all
-                  </button>
-                )}
+              {scanHistory.length > 0 && (
                 <button
                   type="button"
-                  className="history-close"
-                  onClick={() => setShowHistory(false)}
-                  aria-label="Close history"
+                  className="history-clear"
+                  onClick={() => { setScanHistory([]); saveHistory([]) }}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  Clear all
                 </button>
-              </div>
+              )}
             </div>
 
             {scanHistory.length === 0 ? (
-              <p className="history-empty">No scans yet. Take a photo to get started.</p>
+              <p className="history-empty">No scans yet. Switch to Scan and take a photo to get started.</p>
             ) : (
               <ul className="history-list">
                 {scanHistory.map((item) => (
@@ -641,8 +631,60 @@ function App() {
                 ))}
               </ul>
             )}
-          </div>
+          </section>
         )}
+
+        {/* ── Bottom menu bar ── */}
+        <nav className="menu-bar" aria-label="Main navigation">
+          <button
+            type="button"
+            className={`menu-tab${activeTab === 'scan' ? ' menu-tab--active' : ''}`}
+            onClick={() => setActiveTab('scan')}
+            aria-current={activeTab === 'scan' ? 'page' : undefined}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span className="menu-label">Scan</span>
+          </button>
+
+          <button
+            type="button"
+            className={`menu-tab${activeTab === 'history' ? ' menu-tab--active' : ''}`}
+            onClick={() => setActiveTab('history')}
+            aria-current={activeTab === 'history' ? 'page' : undefined}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
+              <path d="M12 8v4l3 3" />
+              <path d="M3.05 11a9 9 0 1 1 .5 4" />
+              <polyline points="3 16 3 11 8 11" />
+            </svg>
+            {scanHistory.length > 0 && (
+              <span className="menu-badge" aria-label={`${scanHistory.length} saved scans`}>
+                {scanHistory.length > 99 ? '99+' : scanHistory.length}
+              </span>
+            )}
+            <span className="menu-label">History</span>
+          </button>
+
+          {/* Install button — hidden when running as PWA */}
+          {!isPwa && installPrompt && (
+            <button
+              type="button"
+              className="menu-tab menu-tab--install"
+              onClick={handleInstall}
+              aria-label="Install app"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span className="menu-label">Install</span>
+            </button>
+          )}
+        </nav>
       </main>
     </div>
   )

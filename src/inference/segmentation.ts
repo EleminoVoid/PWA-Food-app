@@ -1,4 +1,3 @@
-import * as ort from 'onnxruntime-web/webgpu'
 import wasmMjsUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url'
 import wasmBinaryUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url'
 import { imageDataUrlToBitmap, preprocessImage } from './image'
@@ -11,20 +10,26 @@ type RuntimeApi = typeof import('onnxruntime-web')
 
 type LoadedModel = {
   api: RuntimeApi
-  session: ort.InferenceSession
+  session: import('onnxruntime-web').InferenceSession
   metadata: ModelMetadata
   label: string
 }
 
 const modelCache = new Map<ModelId, Promise<LoadedModel>>()
 
-ort.env.wasm.wasmPaths = {
-  mjs: wasmMjsUrl,
-  wasm: wasmBinaryUrl,
+// Configure wasm paths once for the wasm-only backend.
+// We import the wasm module lazily so we can set env before creating any session.
+async function getWasmApi(): Promise<RuntimeApi> {
+  const wasmOrt = await import('onnxruntime-web/wasm')
+  wasmOrt.env.wasm.wasmPaths = {
+    mjs: wasmMjsUrl,
+    wasm: wasmBinaryUrl,
+  }
+  wasmOrt.env.wasm.numThreads = 1
+  wasmOrt.env.wasm.proxy = false
+  wasmOrt.env.logLevel = 'warning'
+  return wasmOrt as unknown as RuntimeApi
 }
-ort.env.wasm.numThreads = 1
-ort.env.wasm.proxy = false
-ort.env.logLevel = 'warning'
 
 export async function loadSegmentationModel(modelId: ModelId) {
   if (!modelCache.has(modelId)) {
@@ -34,7 +39,7 @@ export async function loadSegmentationModel(modelId: ModelId) {
 }
 
 export async function warmSegmentationModels() {
-  await Promise.allSettled((['yolo', 'rfdetr'] as ModelId[]).map((modelId) => loadSegmentationModel(modelId)))
+  await Promise.allSettled((['yolo', 'rfdetr'] as ModelId[]).map((id) => loadSegmentationModel(id)))
 }
 
 export async function runSegmentation(
@@ -68,37 +73,33 @@ export async function runSegmentation(
 
 async function createLoadedModel(modelId: ModelId): Promise<LoadedModel> {
   const option = getModelOption(modelId)
-  const metadata = await fetch(option.metadataUrl).then((response) => {
-    if (!response.ok) throw new Error(`Could not load ${option.metadataUrl}`)
-    return response.json() as Promise<ModelMetadata>
+  const metadata = await fetch(option.metadataUrl).then((res) => {
+    if (!res.ok) throw new Error(`Could not load model metadata: ${option.metadataUrl}`)
+    return res.json() as Promise<ModelMetadata>
   })
   const modelUrl = modelUrlFor(option.metadataUrl, metadata.modelFile)
 
+  // Try WebGPU first (no wasm path config needed), fall through to wasm on any error.
   try {
-    const session = await ort.InferenceSession.create(modelUrl, {
-      executionProviders: ['webgpu', 'wasm'],
+    const webgpuOrt = await import('onnxruntime-web/webgpu')
+    const session = await webgpuOrt.InferenceSession.create(modelUrl, {
+      executionProviders: ['webgpu'],
       graphOptimizationLevel: 'all',
     })
-    return { api: ort, session, metadata, label: option.label }
-  } catch (error) {
-    console.warn('WebGPU session failed, falling back to WASM.', error)
-    const wasmOrt = await import('onnxruntime-web/wasm')
-    wasmOrt.env.wasm.wasmPaths = {
-      mjs: wasmMjsUrl,
-      wasm: wasmBinaryUrl,
-    }
-    wasmOrt.env.wasm.numThreads = 1
-    wasmOrt.env.wasm.proxy = false
-
-    const session = await wasmOrt.InferenceSession.create(modelUrl, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
-    })
-    return { api: wasmOrt, session, metadata, label: option.label }
+    return { api: webgpuOrt as unknown as RuntimeApi, session, metadata, label: option.label }
+  } catch {
+    // WebGPU unavailable — use WASM backend with explicit wasm paths.
   }
+
+  const api = await getWasmApi()
+  const session = await (api as typeof import('onnxruntime-web')).InferenceSession.create(modelUrl, {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'all',
+  })
+  return { api, session, metadata, label: option.label }
 }
 
 function modelUrlFor(metadataUrl: string, modelFile: string) {
-  const metadata = new URL(metadataUrl, window.location.origin)
-  return new URL(modelFile, metadata).toString()
+  const base = new URL(metadataUrl, window.location.origin)
+  return new URL(modelFile, base).toString()
 }
