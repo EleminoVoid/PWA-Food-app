@@ -39,37 +39,37 @@ const SELECTED_MODEL_KEY = 'nutriscan_selected_model'
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     targetId: 'tut-status',
-    title: 'Connection status',
-    body: 'Shows whether the app is online or offline. Inference runs entirely on-device so it works offline too.',
+    title: 'Works offline too',
+    body: 'This app identifies food right on your device — no internet required after the first load.',
     position: 'below',
   },
   {
     targetId: 'tut-help',
-    title: 'Help button',
-    body: 'Tap this any time to replay this tutorial.',
+    title: 'Need help?',
+    body: 'Tap this any time to replay this guide.',
     position: 'below',
   },
   {
     targetId: 'tut-hamburger',
     title: 'Menu',
-    body: 'Opens the side panel — scan history, model settings, confidence threshold, and the app install button.',
+    body: 'Your scan history, accuracy settings, and the option to install the app are all in here.',
     position: 'below',
   },
   {
     targetId: 'tut-gallery',
-    title: 'Upload from gallery',
-    body: 'Pick an existing photo from your library instead of using the live camera.',
+    title: 'Use a photo from your gallery',
+    body: 'Already have a food photo? Tap here to pick it from your library.',
     position: 'above',
   },
   {
     targetId: 'tut-shutter',
-    title: 'Shutter button',
-    body: 'Tap to capture a frame. The ONNX model segments the food directly on your device.',
+    title: 'Take a photo',
+    body: 'Point the camera at any food and tap this button. Results appear in seconds.',
     position: 'above',
   },
 ]
 
-const STEPS = [
+const ONBOARDING_STEPS = [
   {
     id: 1,
     icon: (
@@ -78,45 +78,38 @@ const STEPS = [
         <circle cx="12" cy="13" r="4" />
       </svg>
     ),
-    title: 'Open the camera',
-    body: 'The camera launches automatically. Make sure you are in a well-lit area.',
+    title: 'Point at your food',
+    body: 'Hold your phone over any dish, snack, or ingredient.',
   },
   {
     id: 2,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <polyline points="3 7 3 3 7 3" />
-        <polyline points="17 3 21 3 21 7" />
-        <polyline points="21 17 21 21 17 21" />
-        <polyline points="7 21 3 21 3 17" />
-      </svg>
-    ),
-    title: 'Frame the food',
-    body: 'Center the dish inside the bracket guides. Keep the camera steady.',
-  },
-  {
-    id: 3,
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
         <circle cx="12" cy="12" r="10" />
         <circle cx="12" cy="12" r="3" />
       </svg>
     ),
-    title: 'Tap the shutter',
-    body: 'Press the large button to capture. The on-device ONNX model segments the food instantly.',
+    title: 'Tap the big button',
+    body: 'Press the shutter and the app instantly identifies what it sees.',
   },
   {
-    id: 4,
+    id: 3,
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="step-icon">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <polyline points="3 9 21 9" />
-        <polyline points="9 21 9 9" />
+        <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
       </svg>
     ),
-    title: 'Upload a photo',
-    body: 'Tap the gallery icon to pick an image from your library instead.',
+    title: 'See your food history',
+    body: 'Every scan is saved so you can look back at what you have eaten.',
   },
+]
+
+// ── Accuracy levels (hides the technical "confidence threshold" concept) ──────
+
+const ACCURACY_LEVELS = [
+  { label: 'More results', value: 0.2, desc: 'Catches more items, may include uncertain ones' },
+  { label: 'Balanced', value: 0.35, desc: 'Recommended for most situations' },
+  { label: 'High accuracy', value: 0.55, desc: 'Only very confident detections shown' },
 ]
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
@@ -136,7 +129,7 @@ function readHistory(): ScanRecord[] {
 function saveHistory(records: ScanRecord[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(records))
-  } catch { /* quota exceeded — silently skip */ }
+  } catch { /* quota exceeded */ }
 }
 
 function readSelectedModel(): ModelId {
@@ -170,35 +163,31 @@ function fileToDataUrl(file: File): Promise<string> {
     const reader = new FileReader()
     reader.onload = () => {
       if (typeof reader.result === 'string') resolve(reader.result)
-      else reject(new Error('Could not read image as data URL.'))
+      else reject(new Error('Could not read image.'))
     }
     reader.onerror = () => reject(new Error('Could not read the selected image.'))
     reader.readAsDataURL(file)
   })
 }
 
-function formatScorePercent(score: number) {
-  return `${(score * 100).toFixed(1)}%`
-}
-
 function labelToDisplay(label: string) {
   return label.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function getFriendlyAccuracy(score: number): string {
+  if (score >= 0.85) return 'Very confident'
+  if (score >= 0.7) return 'Confident'
+  if (score >= 0.5) return 'Likely'
+  return 'Possible'
+}
+
 // ── Tutorial overlay ──────────────────────────────────────────────────────────
 
-function TutorialOverlay({
-  steps,
-  onDone,
-}: {
-  steps: TutorialStep[]
-  onDone: () => void
-}) {
+function TutorialOverlay({ steps, onDone }: { steps: TutorialStep[]; onDone: () => void }) {
   const [stepIndex, setStepIndex] = useState(0)
   const [bubbleStyle, setBubbleStyle] = useState<React.CSSProperties>({})
   const [spotStyle, setSpotStyle] = useState<React.CSSProperties>({})
-  const [arrowDir, setArrowDir] = useState<'above' | 'below' | 'left' | 'right'>('below')
-  const bubbleRef = useRef<HTMLDivElement | null>(null)
+  const [arrowDir, setArrowDir] = useState<TutorialStep['position']>('below')
 
   const current = steps[stepIndex]
   const isLast = stepIndex === steps.length - 1
@@ -206,73 +195,43 @@ function TutorialOverlay({
   useEffect(() => {
     const el = document.querySelector(`[data-tutorial-id="${current.targetId}"]`)
     if (!el) return
-
     const rect = el.getBoundingClientRect()
     const vw = window.innerWidth
     const vh = window.innerHeight
-    const PAD = 8
+    const PAD = 10
 
-    // Spotlight
     setSpotStyle({
       top: rect.top - PAD,
       left: rect.left - PAD,
       width: rect.width + PAD * 2,
       height: rect.height + PAD * 2,
-      borderRadius: 12,
+      borderRadius: 14,
     })
 
-    // Bubble positioning — flip if near edge
-    const BUBBLE_W = Math.min(260, vw - 32)
-    const BUBBLE_H = 140
-    const ARROW_SIZE = 10
+    const BUBBLE_W = Math.min(270, vw - 32)
+    const BUBBLE_H = 150
+    const ARROW = 10
     let pos = current.position
-
-    if (pos === 'below' && rect.bottom + BUBBLE_H + ARROW_SIZE + 16 > vh) pos = 'above'
-    if (pos === 'above' && rect.top - BUBBLE_H - ARROW_SIZE - 16 < 0) pos = 'below'
-
+    if (pos === 'below' && rect.bottom + BUBBLE_H + ARROW + 16 > vh) pos = 'above'
+    if (pos === 'above' && rect.top - BUBBLE_H - ARROW - 16 < 0) pos = 'below'
     setArrowDir(pos)
 
-    let top: number
-    let left: number
+    let top: number, left: number
+    if (pos === 'below') { top = rect.bottom + ARROW + 8; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
+    else if (pos === 'above') { top = rect.top - BUBBLE_H - ARROW - 8; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
+    else if (pos === 'left') { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.left - BUBBLE_W - ARROW - 8 }
+    else { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.right + ARROW + 8 }
 
-    if (pos === 'below') {
-      top = rect.bottom + ARROW_SIZE + 8
-      left = rect.left + rect.width / 2 - BUBBLE_W / 2
-    } else if (pos === 'above') {
-      top = rect.top - BUBBLE_H - ARROW_SIZE - 8
-      left = rect.left + rect.width / 2 - BUBBLE_W / 2
-    } else if (pos === 'left') {
-      top = rect.top + rect.height / 2 - BUBBLE_H / 2
-      left = rect.left - BUBBLE_W - ARROW_SIZE - 8
-    } else {
-      top = rect.top + rect.height / 2 - BUBBLE_H / 2
-      left = rect.right + ARROW_SIZE + 8
-    }
-
-    // Clamp to viewport
     left = Math.max(16, Math.min(left, vw - BUBBLE_W - 16))
     top = Math.max(16, Math.min(top, vh - BUBBLE_H - 16))
-
     setBubbleStyle({ top, left, width: BUBBLE_W })
   }, [stepIndex, current])
 
-  const advance = () => {
-    if (isLast) onDone()
-    else setStepIndex((i) => i + 1)
-  }
-
   return (
-    <div className="tutorial-root" role="dialog" aria-modal="true" aria-label="Tutorial">
-      {/* Dark overlay with a cut-out hole for the target element */}
+    <div className="tutorial-root" role="dialog" aria-modal="true" aria-label="App guide">
       <div className="tutorial-dim" aria-hidden="true" />
       <div className="tutorial-spot" style={spotStyle} aria-hidden="true" />
-
-      {/* Bubble */}
-      <div
-        ref={bubbleRef}
-        className={`tutorial-bubble tutorial-bubble--${arrowDir}`}
-        style={bubbleStyle}
-      >
+      <div className={`tutorial-bubble tutorial-bubble--${arrowDir}`} style={bubbleStyle}>
         <div className="tutorial-progress">
           {steps.map((_, i) => (
             <span key={i} className={`tutorial-pip${i === stepIndex ? ' tutorial-pip--active' : ''}`} />
@@ -280,37 +239,36 @@ function TutorialOverlay({
         </div>
         <strong className="tutorial-title">{current.title}</strong>
         <p className="tutorial-body">{current.body}</p>
-        <button type="button" className="tutorial-next" onClick={advance}>
-          {isLast ? 'Done' : 'Next'}
+        <button type="button" className="tutorial-next" onClick={() => isLast ? onDone() : setStepIndex(i => i + 1)}>
+          {isLast ? 'Got it!' : 'Next'}
         </button>
       </div>
     </div>
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Onboarding modal ──────────────────────────────────────────────────────────
 
 function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="How to use NutriScan">
+    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Welcome">
       <div className="modal">
         <div className="modal-header">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="modal-logo">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-            <circle cx="12" cy="13" r="4" />
-          </svg>
-          <h1 className="modal-title">Welcome to NutriScan</h1>
+          <div className="modal-logo-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="modal-logo">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </div>
+          <h1 className="modal-title">Welcome to FoodLens</h1>
           <p className="modal-subtitle">
-            Point your camera at any food and the on-device ONNX model will identify and segment it.
+            Point your camera at any food and find out exactly what it is — works right on your phone, no internet needed.
           </p>
         </div>
-
         <ol className="steps-list">
-          {STEPS.map((step) => (
+          {ONBOARDING_STEPS.map((step) => (
             <li key={step.id} className="step">
-              <div className="step-placeholder">
-                {step.icon}
-              </div>
+              <div className="step-icon-wrap">{step.icon}</div>
               <div className="step-body">
                 <strong className="step-title">{step.title}</strong>
                 <span className="step-desc">{step.body}</span>
@@ -318,47 +276,53 @@ function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
             </li>
           ))}
         </ol>
-
         <button type="button" className="btn-primary" onClick={onDismiss}>
-          Get Started
+          Let&apos;s go
         </button>
       </div>
     </div>
   )
 }
 
-function DetectionList({ result }: { result: SegmentResult }) {
+// ── Detection result list ─────────────────────────────────────────────────────
+
+function FoodResultList({ result }: { result: SegmentResult }) {
   const sorted = [...result.detections].sort((a, b) => b.score - a.score)
   if (sorted.length === 0) return null
   return (
-    <div className="detection-list">
+    <ul className="food-result-list">
       {sorted.map((det, i) => (
-        <div key={i} className="detection-row">
-          <div
-            className="detection-bar"
-            style={{ width: `${(det.score * 100).toFixed(1)}%` }}
-            aria-hidden="true"
-          />
-          <span className="detection-label">{labelToDisplay(det.label)}</span>
-          <span className="detection-score">{formatScorePercent(det.score)}</span>
-        </div>
+        <li key={i} className={`food-result-item${i === 0 ? ' food-result-item--top' : ''}`}>
+          <div className="food-result-bar-wrap">
+            <div
+              className="food-result-bar"
+              style={{ width: `${(det.score * 100).toFixed(0)}%` }}
+              aria-hidden="true"
+            />
+          </div>
+          <span className="food-result-name">{labelToDisplay(det.label)}</span>
+          <span className="food-result-confidence">{getFriendlyAccuracy(det.score)}</span>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
+
+// ── History card ──────────────────────────────────────────────────────────────
 
 function HistoryCard({ record }: { record: ScanRecord }) {
   const top = record.result.detections.reduce<typeof record.result.detections[0] | null>(
     (best, det) => (!best || det.score > best.score ? det : best),
     null,
   )
+  const count = record.result.detections.length
   return (
     <div className="history-item">
-      <img src={record.overlayDataUrl} alt="Scan overlay" className="history-thumb" />
+      <img src={record.overlayDataUrl} alt="" className="history-thumb" />
       <div className="history-meta">
-        <span className="history-label">{top ? labelToDisplay(top.label) : 'Unknown food'}</span>
+        <span className="history-label">{top ? labelToDisplay(top.label) : 'Nothing found'}</span>
         <span className="history-sublabel">
-          {record.result.detections.length} detection{record.result.detections.length !== 1 ? 's' : ''} &middot; {record.result.modelLabel}
+          {count > 1 ? `+${count - 1} more item${count - 1 !== 1 ? 's' : ''}` : 'Single item'}
         </span>
         <span className="history-time">{formatTime(record.createdAt)}</span>
       </div>
@@ -388,10 +352,10 @@ function App() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isPwa] = useState(() => isRunningAsPwa())
   const [selectedModel, setSelectedModel] = useState<ModelId>(() => readSelectedModel())
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.35)
+  const [accuracyIndex, setAccuracyIndex] = useState(1) // default: Balanced
   const [iouThreshold] = useState(0.5)
 
-  const selectedModelOption = MODEL_OPTIONS.find((m) => m.id === selectedModel) ?? MODEL_OPTIONS[0]
+  const confidenceThreshold = ACCURACY_LEVELS[accuracyIndex].value
 
   const stats = useMemo(() => ({
     scans: scanHistory.length,
@@ -445,8 +409,8 @@ function App() {
         await videoRef.current.play()
       }
       setIsCameraActive(true)
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Camera permission denied.')
+    } catch {
+      setErrorMessage("We couldn't access your camera. Please check your permissions and try again.")
       setIsCameraActive(false)
     }
   }, [stopCamera])
@@ -466,11 +430,9 @@ function App() {
         confidenceThreshold,
         iouThreshold,
       })
-
       const oc = overlayCanvasRef.current ?? document.createElement('canvas')
       drawSegmentationOverlay(oc, input, result.detections)
       const overlayDataUrl = oc.toDataURL('image/jpeg', 0.82)
-
       setResultRecord({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         source,
@@ -479,8 +441,8 @@ function App() {
         createdAt: new Date().toISOString(),
         result,
       })
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Segmentation failed. Please try again.')
+    } catch {
+      setErrorMessage("Something went wrong while identifying the food. Please try again.")
     } finally {
       setIsAnalyzing(false)
     }
@@ -489,15 +451,15 @@ function App() {
   const capturePhoto = useCallback(() => {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas) { setErrorMessage('Camera is not ready yet.'); return }
+    if (!video || !canvas) { setErrorMessage("Camera isn't ready yet — please wait a moment."); return }
     if (!video.videoWidth || !video.videoHeight) {
-      setErrorMessage('Wait for the camera feed to load before capturing.')
+      setErrorMessage("Wait for the camera to fully load before taking a photo.")
       return
     }
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
-    if (!ctx) { setErrorMessage('Unable to prepare the photo buffer.'); return }
+    if (!ctx) return
     ctx.drawImage(video, 0, 0)
     void analyzeImage(canvas.toDataURL('image/jpeg', 0.82), 'camera')
   }, [analyzeImage])
@@ -519,8 +481,8 @@ function App() {
     if (!file) return
     try {
       void analyzeImage(await fileToDataUrl(file), 'upload')
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not load the selected photo.')
+    } catch {
+      setErrorMessage("We couldn't open that photo. Please try a different one.")
     }
     e.target.value = ''
   }
@@ -547,16 +509,20 @@ function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Friendly name for the top result
+  const topDetection = resultRecord?.result.detections.reduce<typeof resultRecord.result.detections[0] | null>(
+    (best, d) => (!best || d.score > best.score ? d : best), null,
+  ) ?? null
+
   return (
     <div className="app-shell">
       {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
-
       {tutorialActive && (
         <TutorialOverlay steps={TUTORIAL_STEPS} onDone={() => setTutorialActive(false)} />
       )}
 
-      <main className="camera-app" aria-label="NutriScan food scanner">
-        <section className="camera-stage" aria-label="Camera preview">
+      <main className="camera-app" aria-label="FoodLens">
+        <section className="camera-stage" aria-label="Camera">
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
           <canvas ref={overlayCanvasRef} className="hidden-canvas" aria-hidden="true" />
@@ -565,13 +531,13 @@ function App() {
           <div className="topbar-overlay">
             <div className="status-pill" data-tutorial-id="tut-status">
               <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
-              <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
+              <span className="status-label">{isOnline ? 'Ready' : 'Offline'}</span>
             </div>
             <div className="topbar-right">
               <button
                 type="button"
                 className="topbar-icon-button"
-                aria-label="Help / tutorial"
+                aria-label="Help"
                 data-tutorial-id="tut-help"
                 onClick={() => setTutorialActive(true)}
               >
@@ -593,7 +559,7 @@ function App() {
             </div>
           </div>
 
-          {/* Viewfinder */}
+          {/* Viewfinder guides */}
           <div className="viewfinder" aria-hidden="true">
             <span className="vf-corner vf-tl" />
             <span className="vf-corner vf-tr" />
@@ -601,75 +567,101 @@ function App() {
             <span className="vf-corner vf-br" />
           </div>
 
-          {/* Camera paused */}
+          {/* Hint label under viewfinder */}
+          {isCameraActive && !isAnalyzing && !resultRecord && (
+            <p className="viewfinder-hint">Point at your food and tap the button</p>
+          )}
+
+          {/* Camera not available */}
           {!isCameraActive && !isAnalyzing && !resultRecord && (
             <div className="camera-overlay">
-              <p>Camera paused &mdash; tap the shutter to retry</p>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="camera-off-icon">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+              <p className="camera-off-title">Camera not available</p>
+              <p className="camera-off-body">Check that you have given camera permission in your browser settings.</p>
+              <button type="button" className="btn-retry" onClick={startCamera}>Try again</button>
             </div>
           )}
 
-          {/* Analyzing spinner */}
+          {/* Analyzing */}
           {isAnalyzing && (
             <div className="analyzing-overlay" aria-live="polite">
-              <div className="analyzing-spinner" aria-hidden="true" />
-              <p className="analyzing-label">Running {selectedModelOption.label}&hellip;</p>
+              <div className="analyzing-ring" aria-hidden="true">
+                <div className="analyzing-spinner" />
+              </div>
+              <p className="analyzing-title">Identifying your food&hellip;</p>
+              <p className="analyzing-sub">This only takes a second</p>
             </div>
           )}
 
-          {/* Error banner */}
+          {/* Error */}
           {errorMessage && !isAnalyzing && (
-            <p className="error-message" role="alert">{errorMessage}</p>
+            <div className="error-banner" role="alert">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="error-icon">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{errorMessage}</span>
+            </div>
           )}
 
-          {/* Result overlay */}
+          {/* Result sheet */}
           {resultRecord && (
             <div className="result-overlay" role="dialog" aria-label="Scan result">
               <img
                 src={resultRecord.overlayDataUrl}
-                alt="Segmented food"
+                alt="Identified food"
                 className="result-bg-image"
               />
               <div className="result-sheet">
-                <div className="result-sheet-header">
-                  <div>
-                    <p className="result-sheet-category">{resultRecord.result.modelLabel}</p>
-                    <h2 className="result-sheet-name">
-                      {resultRecord.result.detections.length > 0
-                        ? labelToDisplay(resultRecord.result.detections.reduce((b, d) => d.score > b.score ? d : b).label)
-                        : 'No food detected'}
-                    </h2>
-                  </div>
-                  <span className="result-confidence-chip">
-                    {resultRecord.result.detections.length} detection{resultRecord.result.detections.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
-
-                <DetectionList result={resultRecord.result} />
-
-                <p className="result-meta">
-                  {resultRecord.result.elapsedMs.toFixed(0)}ms &middot; {resultRecord.result.imageWidth}&times;{resultRecord.result.imageHeight}px
-                </p>
-
-                <div className="result-sheet-actions">
+                {topDetection ? (
+                  <>
+                    <div className="result-eyebrow">Looks like&hellip;</div>
+                    <h2 className="result-headline">{labelToDisplay(topDetection.label)}</h2>
+                    <div className="result-certainty-row">
+                      <span className="result-certainty-badge">
+                        {getFriendlyAccuracy(topDetection.score)}
+                      </span>
+                      {resultRecord.result.detections.length > 1 && (
+                        <span className="result-more-label">
+                          {resultRecord.result.detections.length - 1} more item{resultRecord.result.detections.length - 1 !== 1 ? 's' : ''} found
+                        </span>
+                      )}
+                    </div>
+                    {resultRecord.result.detections.length > 1 && (
+                      <FoodResultList result={resultRecord.result} />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="result-eyebrow">Hmm&hellip;</div>
+                    <h2 className="result-headline">No food found</h2>
+                    <p className="result-no-food-hint">Try moving closer, improving the lighting, or adjusting the accuracy in settings.</p>
+                  </>
+                )}
+                <div className="result-actions">
                   <button type="button" className="btn-retake" onClick={takeAnother}>
-                    Take Another
+                    Try again
                   </button>
                   <button type="button" className="btn-use" onClick={saveResult}>
-                    Save to History
+                    Save to journal
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Bottom capture controls */}
+          {/* Bottom controls */}
           {!resultRecord && (
             <div className="controls-row">
               <button
                 type="button"
                 className="gallery-button"
                 onClick={openGallery}
-                aria-label="Upload from gallery"
+                aria-label="Choose from gallery"
                 disabled={isAnalyzing}
                 data-tutorial-id="tut-gallery"
               >
@@ -710,7 +702,7 @@ function App() {
           />
         </section>
 
-        {/* ── Side menu panel ── */}
+        {/* ── Side menu ── */}
         {sideMenuOpen && (
           <div
             className="side-menu-backdrop"
@@ -718,17 +710,14 @@ function App() {
             onClick={() => setSideMenuOpen(false)}
           />
         )}
-        <aside
-          className={`side-menu${sideMenuOpen ? ' side-menu--open' : ''}`}
-          aria-label="Menu"
-        >
+        <aside className={`side-menu${sideMenuOpen ? ' side-menu--open' : ''}`} aria-label="Menu">
           <div className="side-menu-header">
             <div className="side-menu-brand">
               <svg viewBox="0 0 24 24" aria-hidden="true" className="side-menu-logo">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
-              <span className="side-menu-brand-name">NutriScan</span>
+              <span className="side-menu-brand-name">FoodLens</span>
             </div>
             <button
               type="button"
@@ -743,67 +732,72 @@ function App() {
             </button>
           </div>
 
-          {/* Install button — hidden when already a PWA */}
+          {/* Install */}
           {!isPwa && installPrompt && (
             <button type="button" className="side-menu-install" onClick={handleInstall}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 15V3m0 12-4-4m4 4 4-4" />
                 <path d="M2 17v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2" />
               </svg>
-              Download App
+              Add to Home Screen
             </button>
           )}
 
-          {/* Model + settings */}
-          <div className="side-menu-section-label">Model</div>
-          <div className="side-menu-model-chips">
-            {MODEL_OPTIONS.map((opt) => (
+          {/* Accuracy */}
+          <div className="side-menu-section-label">Accuracy</div>
+          <div className="side-accuracy-group">
+            {ACCURACY_LEVELS.map((level, i) => (
               <button
-                key={opt.id}
+                key={level.label}
                 type="button"
-                className={`side-model-chip${selectedModel === opt.id ? ' side-model-chip--active' : ''}`}
-                onClick={() => setSelectedModel(opt.id)}
+                className={`side-accuracy-btn${accuracyIndex === i ? ' side-accuracy-btn--active' : ''}`}
+                onClick={() => setAccuracyIndex(i)}
               >
-                {opt.label}
+                <span className="side-accuracy-name">{level.label}</span>
+                <span className="side-accuracy-desc">{level.desc}</span>
               </button>
             ))}
           </div>
 
-          <div className="side-menu-section-label">Settings</div>
-          <div className="side-setting-row">
-            <label htmlFor="side-conf-slider" className="side-setting-label">
-              Confidence threshold
-              <span className="side-setting-value">{(confidenceThreshold * 100).toFixed(0)}%</span>
-            </label>
-            <input
-              id="side-conf-slider"
-              type="range"
-              min="0.1"
-              max="0.9"
-              step="0.05"
-              value={confidenceThreshold}
-              onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-              className="side-slider"
-            />
+          {/* Model — shown as "Speed" vs "Accuracy" choice, no technical names */}
+          <div className="side-menu-section-label">Detection mode</div>
+          <div className="side-model-group">
+            {MODEL_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`side-model-btn${selectedModel === opt.id ? ' side-model-btn--active' : ''}`}
+                onClick={() => setSelectedModel(opt.id)}
+              >
+                {opt.id === 'yolo' ? 'Fast' : 'Detailed'}
+              </button>
+            ))}
           </div>
 
           {/* History */}
-          <div className="side-menu-section-label">Scan History</div>
-          <div className="side-menu-stats">
-            {stats.scans} scan{stats.scans !== 1 ? 's' : ''}&nbsp;&middot;&nbsp;{stats.detections} detection{stats.detections !== 1 ? 's' : ''}
-            {scanHistory.length > 0 && (
+          <div className="side-menu-section-label">
+            Food journal
+            {stats.scans > 0 && (
+              <span className="side-history-count">{stats.scans} scan{stats.scans !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+
+          {scanHistory.length > 0 && (
+            <div className="side-journal-actions">
               <button
                 type="button"
                 className="side-menu-clear"
                 onClick={() => { setScanHistory([]); saveHistory([]) }}
               >
-                Clear all
+                Clear journal
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {scanHistory.length === 0 ? (
-            <p className="side-menu-empty">No scans yet. Take a photo to get started.</p>
+            <p className="side-menu-empty">
+              Your food journal is empty. Take your first photo to get started.
+            </p>
           ) : (
             <ul className="side-menu-history-list">
               {scanHistory.map((item) => (
@@ -814,7 +808,6 @@ function App() {
             </ul>
           )}
         </aside>
-
       </main>
     </div>
   )
