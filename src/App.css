@@ -405,12 +405,92 @@ input {
   display: none;
 }
 
-/* ── History button (top-right overlay) ────────────────────────────────────── */
-.history-button {
+/* ── Top bar overlay ────────────────────────────────────────────────────────── */
+.topbar-overlay {
   position: absolute;
   top: max(var(--camera-margin), env(safe-area-inset-top));
+  left: var(--camera-margin);
   right: var(--camera-margin);
   z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: all;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.74);
+  border: 1px solid rgba(226, 232, 240, 0.12);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.online  { background: #4ade80; }
+.status-dot.offline { background: #f87171; }
+
+.status-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+}
+
+.install-button {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.74);
+  border: 1px solid rgba(226, 232, 240, 0.16);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.install-button:hover,
+.install-button:focus-visible {
+  transform: scale(1.07);
+}
+
+.install-button:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 3px;
+}
+
+.install-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: #94a3b8;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── History button ─────────────────────────────────────────────────────────── */
+.history-button {
+  position: relative;
   width: 48px;
   height: 48px;
   display: grid;
@@ -424,26 +504,105 @@ input {
   transition: transform 160ms ease, opacity 160ms ease;
 }
 
-.history-button:hover,
-.history-button:focus-visible {
-  transform: scale(1.07);
+.history-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #67e8f9;
+  color: #0f172a;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
-.history-button:focus-visible {
-  outline: 2px solid #67e8f9;
-  outline-offset: 3px;
+/* ── History header extras ──────────────────────────────────────────────────── */
+.history-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: #475569;
 }
 
-.history-icon {
-  width: 22px;
-  height: 22px;
-  stroke: #94a3b8;
-  stroke-width: 1.8;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.history-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
+.history-clear {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.4);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.history-clear:active { opacity: 0.7; }
+
+/* ── Result card (in history list) ─────────────────────────────────────────── */
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.result-thumb {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+}
+
+.result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result-category {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #67e8f9;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.result-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+/* ── Install message ────────────────────────────────────────────────────────── */
+.install-message {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--capture-size) + 24px);
+  transform: translateX(-50%);
+  z-index: 5;
+  margin: 0;
+  max-width: min(92vw, 34rem);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.84);
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  color: #67e8f9;
+  font-size: 0.8rem;
+  text-align: center;
+}
 /* ── History panel ──────────────────────────────────────────────────────────── */
 .history-panel {
   position: absolute;
@@ -523,36 +682,17 @@ input {
 .history-item {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.75rem;
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(226, 232, 240, 0.07);
 }
 
-.history-thumb {
-  flex: 0 0 auto;
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
-  object-fit: cover;
-  display: block;
-}
-
-.history-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.history-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
 .history-time {
-  font-size: 0.75rem;
+  flex-shrink: 0;
+  font-size: 0.72rem;
   color: #475569;
 }
 

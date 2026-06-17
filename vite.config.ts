@@ -2,9 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
 export default defineConfig({
   server: {
+    host: true,
     proxy: {
       '/api': 'http://localhost:3001',
     },
@@ -12,13 +12,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'pwa-icon.svg'],
       manifest: {
-        name: 'PWA Starter',
-        short_name: 'PWA Starter',
-        description: 'A starter app for building installable offline-ready web apps.',
-        theme_color: '#0f172a',
+        name: 'NutriScan Food Scanner',
+        short_name: 'NutriScan',
+        description: 'Scan meals, estimate nutrition, and keep a private offline food history.',
+        theme_color: '#020617',
         background_color: '#020617',
         display: 'standalone',
         start_url: '/',
@@ -32,8 +35,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,svg,webmanifest}'],
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,svg,png,jpg,jpeg,webmanifest}'],
       },
     }),
   ],
