@@ -303,6 +303,20 @@ function App() {
         <section className="camera-stage" aria-label="Camera preview">
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
 
+          {/* Top-right history button */}
+          <button
+            type="button"
+            className="history-button"
+            onClick={() => setShowHistory(true)}
+            aria-label="View scan history"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="history-icon">
+              <path d="M12 8v4l3 3" />
+              <path d="M3.05 11a9 9 0 1 1 .5 4" />
+              <polyline points="3 16 3 11 8 11" />
+            </svg>
+          </button>
+
           {/* Centered viewfinder frame */}
           <div className="viewfinder" aria-hidden="true">
             <span className="vf-corner vf-tl" />
@@ -381,6 +395,54 @@ function App() {
             onChange={handleFilePick}
           />
         </section>
+
+        {/* History panel */}
+        {showHistory && (
+          <div
+            className="history-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Scan history"
+          >
+            <div className="history-header">
+              <h2 className="history-title">History</h2>
+              <button
+                type="button"
+                className="history-close"
+                onClick={() => setShowHistory(false)}
+                aria-label="Close history"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {history.length === 0 ? (
+              <p className="history-empty">No scans yet. Take a photo to get started.</p>
+            ) : (
+              <ul className="history-list">
+                {history.map((item, i) => (
+                  <li key={i} className="history-item">
+                    <img
+                      src={item.url}
+                      alt={`Scan from ${item.timestamp}`}
+                      className="history-thumb"
+                    />
+                    <div className="history-meta">
+                      <span className="history-label">
+                        {/* Food name will appear here once ONNX is wired in */}
+                        Unidentified food
+                      </span>
+                      <span className="history-time">{item.timestamp}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </main>
     </>
   )
