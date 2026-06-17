@@ -1,107 +1,65 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './App.css'
+import './segmentation.css'
+import { drawSegmentationOverlay } from './inference/image'
+import { MODEL_OPTIONS } from './inference/models'
+import { runSegmentation, warmSegmentationModels } from './inference/segmentation'
+import type { ImageInput, ModelId, SegmentDetection, SegmentResult } from './inference/types'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
-type FoodProfile = {
-  name: string
-  category: string
-  calories: number
-  protein: number
-  carbs: number
-  fat: number
-  fiber: number
-  confidence: number
-  tip: string
-}
-
-type ScanRecord = FoodProfile & {
+type ScanRecord = {
   id: string
   source: 'camera' | 'upload'
   imageDataUrl: string
+  overlayDataUrl: string
   createdAt: string
+  result: SegmentResult
 }
 
 type Screen = 'home' | 'scan' | 'history'
 
-const HISTORY_KEY = 'nutriscan_history'
+const HISTORY_KEY = 'nutriscan_segmentation_history'
 const ONBOARDING_KEY = 'nutriscan_onboarded'
+const SELECTED_MODEL_KEY = 'nutriscan_selected_model'
 
-const foodProfiles: FoodProfile[] = [
-  {
-    name: 'Garden salad bowl',
-    category: 'Vegetable meal',
-    calories: 260,
-    protein: 8,
-    carbs: 28,
-    fat: 13,
-    fiber: 9,
-    confidence: 91,
-    tip: 'Add beans, egg, tofu, or grilled chicken if this is your main meal.',
-  },
-  {
-    name: 'Chicken rice plate',
-    category: 'Balanced meal',
-    calories: 520,
-    protein: 34,
-    carbs: 58,
-    fat: 17,
-    fiber: 5,
-    confidence: 87,
-    tip: 'Pair it with greens or soup to make the plate more filling.',
-  },
-  {
-    name: 'Fruit snack',
-    category: 'Fresh snack',
-    calories: 180,
-    protein: 2,
-    carbs: 44,
-    fat: 1,
-    fiber: 7,
-    confidence: 84,
-    tip: 'Great for quick energy. Add yogurt or nuts for longer satiety.',
-  },
-  {
-    name: 'Pasta serving',
-    category: 'Carb-forward meal',
-    calories: 610,
-    protein: 18,
-    carbs: 82,
-    fat: 23,
-    fiber: 6,
-    confidence: 79,
-    tip: 'A smaller portion plus vegetables keeps the meal lighter.',
-  },
-]
+const defaultThresholds = {
+  confidenceThreshold: 0.35,
+  iouThreshold: 0.5,
+}
 
 const emptyStats = {
   scans: 0,
-  averageCalories: 0,
-  protein: 0,
+  detections: 0,
+  modelsUsed: 0,
 }
 
 function readHistory(): ScanRecord[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
-    const parsed = raw ? JSON.parse(raw) as Array<Partial<ScanRecord> & { imageUrl?: string }> : []
-    return parsed
-      .map((item) => ({
-        ...item,
-        imageDataUrl: item.imageDataUrl ?? (item.imageUrl?.startsWith('data:') ? item.imageUrl : ''),
-      }))
-      .filter((item): item is ScanRecord => Boolean(
-        item.id &&
-        item.name &&
-        item.category &&
-        item.createdAt &&
-        item.imageDataUrl,
-      ))
+    const parsed = raw ? (JSON.parse(raw) as ScanRecord[]) : []
+    return parsed.filter((item) => Boolean(
+      item.id &&
+      item.createdAt &&
+      item.imageDataUrl &&
+      item.overlayDataUrl &&
+      item.result?.detections,
+    ))
   } catch {
     return []
+  }
+}
+
+function readSelectedModel(): ModelId {
+  try {
+    const stored = localStorage.getItem(SELECTED_MODEL_KEY)
+    return stored === 'rfdetr' ? 'rfdetr' : 'yolo'
+  } catch {
+    return 'yolo'
   }
 }
 
@@ -113,43 +71,6 @@ function hasSeenOnboarding() {
   }
 }
 
-function pickProfile(seed: number) {
-  return foodProfiles[Math.abs(seed) % foodProfiles.length]
-}
-
-function createRecord(imageDataUrl: string, source: ScanRecord['source'], seed: number): ScanRecord {
-  return {
-    ...pickProfile(seed),
-    id: crypto.randomUUID(),
-    source,
-    imageDataUrl,
-    createdAt: new Date().toISOString(),
-  }
-}
-
-function loadImage(file: File) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('Could not read the selected image.'))
-    image.src = URL.createObjectURL(file)
-  })
-}
-
-function imageToDataUrl(image: HTMLImageElement, maxSize = 900) {
-  const canvas = document.createElement('canvas')
-  const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight))
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
-
-  const context = canvas.getContext('2d')
-  if (!context) throw new Error('Unable to prepare the photo buffer.')
-
-  context.drawImage(image, 0, 0, canvas.width, canvas.height)
-  URL.revokeObjectURL(image.src)
-  return canvas.toDataURL('image/jpeg', 0.72)
-}
-
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -157,6 +78,62 @@ function formatTime(value: string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('Could not read the selected image as a data URL.'))
+      }
+    }
+    reader.onerror = () => reject(new Error('Could not read the selected image.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function serializeDetections(detections: SegmentDetection[]) {
+  return detections.map((detection) => ({
+    label: detection.label,
+    confidence: Number(detection.score.toFixed(4)),
+    box: {
+      x1: Math.round(detection.box[0]),
+      y1: Math.round(detection.box[1]),
+      x2: Math.round(detection.box[2]),
+      y2: Math.round(detection.box[3]),
+      width: Math.round(detection.box[2] - detection.box[0]),
+      height: Math.round(detection.box[3] - detection.box[1]),
+    },
+    points: detection.points.map(([x, y]) => [Math.round(x), Math.round(y)]),
+  }))
+}
+
+function resultJson(result: SegmentResult) {
+  return JSON.stringify(
+    {
+      model: result.modelLabel,
+      modelType: result.modelType,
+      elapsedMs: Math.round(result.elapsedMs),
+      image: {
+        width: result.imageWidth,
+        height: result.imageHeight,
+      },
+      detections: serializeDetections(result.detections),
+    },
+    null,
+    2,
+  )
+}
+
+function formatScore(score: number) {
+  return score.toFixed(2)
+}
+
+function formatScorePercent(score: number) {
+  return `${(score * 100).toFixed(1)}%`
 }
 
 function App() {
@@ -174,12 +151,20 @@ function App() {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installMessage, setInstallMessage] = useState('')
+  const [fullPreview, setFullPreview] = useState<ScanRecord | null>(null)
+  const [selectedModel, setSelectedModel] = useState<ModelId>(readSelectedModel)
+  const [confidenceThreshold, setConfidenceThreshold] = useState(defaultThresholds.confidenceThreshold)
+  const [iouThreshold, setIouThreshold] = useState(defaultThresholds.iouThreshold)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [modelStatus, setModelStatus] = useState('Models will load on first scan.')
+
+  const selectedModelOption = MODEL_OPTIONS.find((model) => model.id === selectedModel) ?? MODEL_OPTIONS[0]
 
   const stats = useMemo(() => {
     if (!history.length) return emptyStats
-    const calories = Math.round(history.reduce((sum, item) => sum + item.calories, 0) / history.length)
-    const protein = Math.round(history.reduce((sum, item) => sum + item.protein, 0))
-    return { scans: history.length, averageCalories: calories, protein }
+    const detections = history.reduce((sum, item) => sum + item.result.detections.length, 0)
+    const modelsUsed = new Set(history.map((item) => item.result.modelId)).size
+    return { scans: history.length, detections, modelsUsed }
   }, [history])
 
   const displayedResult = latestResult ?? history[0] ?? null
@@ -211,12 +196,29 @@ function App() {
   }, [])
 
   useEffect(() => {
+    warmSegmentationModels()
+      .then(() => setModelStatus('YOLO and RF-DETR are ready for offline inference.'))
+      .catch((error) => {
+        console.warn('Model warmup failed.', error)
+        setModelStatus('Model warmup failed. A scan will retry loading the selected model.')
+      })
+  }, [])
+
+  useEffect(() => {
     try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 12)))
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 8)))
     } catch {
       console.warn('NutriScan history could not be persisted.')
     }
   }, [history])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SELECTED_MODEL_KEY, selectedModel)
+    } catch {
+      // The model can still be selected for this session.
+    }
+  }, [selectedModel])
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -272,6 +274,42 @@ function App() {
     setErrorMessage('')
   }
 
+  const analyzeImage = async (imageDataUrl: string, source: ScanRecord['source']) => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      setErrorMessage('Unable to prepare the segmentation canvas.')
+      return
+    }
+
+    setIsAnalyzing(true)
+    setErrorMessage('')
+    setModelStatus(`Running ${selectedModelOption.label}...`)
+
+    try {
+      const { input, result } = await runSegmentation(selectedModel, imageDataUrl, {
+        confidenceThreshold,
+        iouThreshold,
+      })
+      drawSegmentationOverlay(canvas, input as ImageInput, result.detections)
+      const overlayDataUrl = canvas.toDataURL('image/jpeg', 0.86)
+      const record: ScanRecord = {
+        id: crypto.randomUUID(),
+        source,
+        imageDataUrl,
+        overlayDataUrl,
+        result,
+        createdAt: new Date().toISOString(),
+      }
+      saveResult(record)
+      setModelStatus(`${result.modelLabel} finished with ${result.detections.length} detections.`)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'ONNX inference failed.')
+      setModelStatus('Inference failed. Check the model files and browser console.')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
   const capturePhoto = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -290,8 +328,9 @@ function App() {
     }
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.72)
-    saveResult(createRecord(imageDataUrl, 'camera', Date.now()))
+    const imageDataUrl = canvas.toDataURL('image/png')
+    stopCamera()
+    void analyzeImage(imageDataUrl, 'camera')
   }
 
   const handleFilePick = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -299,9 +338,8 @@ function App() {
     if (!file) return
 
     try {
-      const image = await loadImage(file)
-      const imageDataUrl = imageToDataUrl(image)
-      saveResult(createRecord(imageDataUrl, 'upload', file.size + file.name.length))
+      const imageDataUrl = await fileToDataUrl(file)
+      await analyzeImage(imageDataUrl, 'upload')
       event.target.value = ''
     } catch (error) {
       setErrorMessage(
@@ -321,7 +359,7 @@ function App() {
     setInstallPrompt(null)
     setInstallMessage(
       choice.outcome === 'accepted'
-        ? 'Install started. Offline shell is available after first load.'
+        ? 'Install started. Offline shell and model cache are available after first load.'
         : 'Install dismissed. You can try again later.',
     )
   }
@@ -346,11 +384,11 @@ function App() {
         <section className="welcome-panel" aria-labelledby="welcome-title">
           <div className="brand-mark" aria-hidden="true">N</div>
           <div>
-            <p className="eyebrow">Offline-ready food companion</p>
+            <p className="eyebrow">Offline-ready segmentation</p>
             <h1 id="welcome-title">Meet NutriScan</h1>
             <p>
-              Capture or upload a meal, get an instant nutrition estimate, and keep
-              a private scan history on this device.
+              Capture or upload a meal and run YOLO or RF-DETR segmentation directly
+              on this device. The result is boxes, mask overlays, and JSON points.
             </p>
           </div>
           <button type="button" className="primary-action" onClick={dismissOnboarding}>
@@ -375,21 +413,31 @@ function App() {
       </header>
 
       {installMessage && <p className="status-note">{installMessage}</p>}
+      <p className="status-note">{modelStatus}</p>
 
       {screen === 'home' && (
         <section className="home-grid" aria-label="NutriScan dashboard">
           <div className="hero-panel">
-            <p className="eyebrow">Smart meal check</p>
-            <h2>Scan food, understand the plate, keep moving.</h2>
+            <p className="eyebrow">On-device food segmentation</p>
+            <h2>Scan food, inspect masks, export JSON.</h2>
             <p>
-              This version uses local demo estimates until the ONNX model is connected,
-              so the flow is ready without needing a server or Wi-Fi.
+              Choose YOLO or RF-DETR before scanning. Each model uses its own preprocessing
+              path and runs locally through ONNX Runtime Web.
             </p>
+            <ModelControls
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              confidenceThreshold={confidenceThreshold}
+              onConfidenceChange={setConfidenceThreshold}
+              iouThreshold={iouThreshold}
+              onIouChange={setIouThreshold}
+              disabled={isAnalyzing}
+            />
             <div className="hero-actions">
-              <button type="button" className="primary-action" onClick={() => setScreen('scan')}>
+              <button type="button" className="primary-action" onClick={() => setScreen('scan')} disabled={isAnalyzing}>
                 Scan food
               </button>
-              <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+              <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
                 Upload photo
               </button>
             </div>
@@ -401,21 +449,28 @@ function App() {
               <span>Saved scans</span>
             </article>
             <article>
-              <strong>{stats.averageCalories}</strong>
-              <span>Avg calories</span>
+              <strong>{stats.detections}</strong>
+              <span>Total detections</span>
             </article>
             <article>
-              <strong>{stats.protein}g</strong>
-              <span>Total protein</span>
+              <strong>{stats.modelsUsed}</strong>
+              <span>Models used</span>
             </article>
           </div>
 
+          {isAnalyzing && (
+            <section className="empty-result">
+              <h3>Running segmentation</h3>
+              <p>{selectedModelOption.label} is processing the image. First load may take longer while the model is cached.</p>
+            </section>
+          )}
+
           {displayedResult ? (
-            <ResultCard result={displayedResult} />
+            <ResultCard result={displayedResult} onOpenPreview={setFullPreview} />
           ) : (
             <section className="empty-result">
-              <h3>No meal scanned yet</h3>
-              <p>Take a photo or upload one to see calories, macros, confidence, and a practical eating tip.</p>
+              <h3>No food segmented yet</h3>
+              <p>Take a photo or upload one to see mask overlays, boxes, confidence scores, and JSON points.</p>
             </section>
           )}
         </section>
@@ -431,10 +486,10 @@ function App() {
                 <h2>Camera is paused</h2>
                 <p>Use live camera when available, or open the device camera picker.</p>
                 <div className="camera-fallback-actions">
-                  <button type="button" className="primary-action" onClick={startCamera}>
+                  <button type="button" className="primary-action" onClick={startCamera} disabled={isAnalyzing}>
                     Start camera
                   </button>
-                  <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+                  <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
                     Take or upload photo
                   </button>
                 </div>
@@ -446,13 +501,13 @@ function App() {
           {errorMessage && <p className="error-message">{errorMessage}</p>}
 
           <div className="scan-actions">
-            <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()}>
+            <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
               Upload
             </button>
-            <button type="button" className="capture-action" onClick={capturePhoto}>
-              Scan
+            <button type="button" className="capture-action" onClick={capturePhoto} disabled={isAnalyzing}>
+              {isAnalyzing ? '...' : 'Scan'}
             </button>
-            <button type="button" className="secondary-action" onClick={stopCamera}>
+            <button type="button" className="secondary-action" onClick={stopCamera} disabled={isAnalyzing}>
               Pause
             </button>
           </div>
@@ -464,7 +519,7 @@ function App() {
           <div className="section-title">
             <div>
               <p className="eyebrow">Private log</p>
-              <h2>Recent scans</h2>
+              <h2>Recent segmentations</h2>
             </div>
             <button type="button" className="text-action" onClick={clearHistory}>
               Clear
@@ -475,10 +530,10 @@ function App() {
             <div className="history-list">
               {history.map((item) => (
                 <article className="history-item" key={item.id}>
-                  <img src={item.imageDataUrl} alt="" />
+                  <img src={item.overlayDataUrl} alt="" />
                   <div>
-                    <strong>{item.name}</strong>
-                    <span>{formatTime(item.createdAt)} · {item.calories} kcal · {item.protein}g protein</span>
+                    <strong>{item.result.modelLabel}</strong>
+                    <span>{formatTime(item.createdAt)} · {item.result.detections.length} detections · {item.source}</span>
                   </div>
                 </article>
               ))}
@@ -486,10 +541,16 @@ function App() {
           ) : (
             <section className="empty-result">
               <h3>No saved scans</h3>
-              <p>Your latest scans will appear here and remain stored locally on this device.</p>
+              <p>Your latest segmentation runs will appear here and remain stored locally on this device.</p>
             </section>
           )}
         </section>
+      )}
+
+      {errorMessage && screen !== 'scan' && <p className="error-message">{errorMessage}</p>}
+
+      {fullPreview && (
+        <FullPreviewModal result={fullPreview} onClose={() => setFullPreview(null)} />
       )}
 
       <nav className="bottom-nav" aria-label="Main navigation">
@@ -517,25 +578,137 @@ function App() {
   )
 }
 
-function ResultCard({ result }: { result: ScanRecord }) {
+function ModelControls({
+  selectedModel,
+  onModelChange,
+  confidenceThreshold,
+  onConfidenceChange,
+  iouThreshold,
+  onIouChange,
+  disabled,
+}: {
+  selectedModel: ModelId
+  onModelChange: (modelId: ModelId) => void
+  confidenceThreshold: number
+  onConfidenceChange: (value: number) => void
+  iouThreshold: number
+  onIouChange: (value: number) => void
+  disabled: boolean
+}) {
   return (
-    <section className="result-card" aria-label="Latest scan result">
-      <img src={result.imageDataUrl} alt="" />
+    <div className="model-panel" aria-label="Model and threshold controls">
+      <div className="model-switcher">
+        {MODEL_OPTIONS.map((model) => (
+          <button
+            type="button"
+            key={model.id}
+            className={selectedModel === model.id ? 'active' : ''}
+            onClick={() => onModelChange(model.id)}
+            disabled={disabled}
+          >
+            <strong>{model.label}</strong>
+            <span>{model.description}</span>
+          </button>
+        ))}
+      </div>
+
+      <label>
+        Confidence {confidenceThreshold.toFixed(2)}
+        <input
+          type="range"
+          min="0.05"
+          max="0.95"
+          step="0.05"
+          value={confidenceThreshold}
+          onChange={(event) => onConfidenceChange(Number(event.target.value))}
+          disabled={disabled}
+        />
+      </label>
+
+      <label>
+        IoU {iouThreshold.toFixed(2)}
+        <input
+          type="range"
+          min="0.1"
+          max="0.9"
+          step="0.05"
+          value={iouThreshold}
+          onChange={(event) => onIouChange(Number(event.target.value))}
+          disabled={disabled}
+        />
+      </label>
+    </div>
+  )
+}
+
+function ResultCard({
+  result,
+  onOpenPreview,
+}: {
+  result: ScanRecord
+  onOpenPreview: (record: ScanRecord) => void
+}) {
+  const topDetection = result.result.detections[0]
+
+  return (
+    <section className="result-card" aria-label="Latest segmentation result">
+      <button
+        type="button"
+        className="result-preview"
+        aria-label="Open full segmentation preview"
+        onClick={() => onOpenPreview(result)}
+      >
+        <img src={result.overlayDataUrl} alt="" />
+        <span>Open full preview</span>
+      </button>
       <div className="result-content">
         <div>
-          <p className="eyebrow">{result.category}</p>
-          <h2>{result.name}</h2>
-          <span className="confidence">{result.confidence}% match</span>
+          <p className="eyebrow">{result.result.modelLabel}</p>
+          <h2>{topDetection ? topDetection.label : 'No detections'}</h2>
+          <span className="confidence">
+            {result.result.detections.length} detections · {Math.round(result.result.elapsedMs)} ms
+          </span>
         </div>
 
-        <div className="macro-grid">
-          <span><strong>{result.calories}</strong> kcal</span>
-          <span><strong>{result.protein}g</strong> protein</span>
-          <span><strong>{result.carbs}g</strong> carbs</span>
-          <span><strong>{result.fat}g</strong> fat</span>
-        </div>
+        {result.result.detections.length ? (
+          <div className="detection-list">
+            {result.result.detections.slice(0, 5).map((detection, index) => (
+              <span key={`${detection.label}-${index}`}>
+                <strong>{detection.label}</strong>
+                {formatScore(detection.score)} ({formatScorePercent(detection.score)})
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="tip">No objects passed the current confidence threshold. Try lowering it or switching models.</p>
+        )}
 
-        <p className="tip">{result.tip}</p>
+        <pre className="result-json">{resultJson(result.result)}</pre>
+      </div>
+    </section>
+  )
+}
+
+function FullPreviewModal({
+  result,
+  onClose,
+}: {
+  result: ScanRecord
+  onClose: () => void
+}) {
+  return (
+    <section className="preview-modal" role="dialog" aria-modal="true" aria-label="Full segmentation preview">
+      <div className="preview-modal__bar">
+        <div>
+          <p className="eyebrow">{result.result.modelLabel}</p>
+          <h2>{result.result.detections.length} detections</h2>
+        </div>
+        <button type="button" className="secondary-action" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <div className="preview-modal__image">
+        <img src={result.overlayDataUrl} alt="Full segmentation overlay" />
       </div>
     </section>
   )

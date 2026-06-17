@@ -1,7 +1,7 @@
-<script>
+﻿<script>
   import { onMount } from 'svelte'
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let videoEl = null
   let canvasEl = null
   let fileInput = null
@@ -16,10 +16,10 @@
   /** Shown once on first visit */
   let showOnboarding = true
 
-  /** Nutrition result object — populated after ONNX inference */
+  /** Segmentation result object populated after ONNX inference */
   let result = null
 
-  // ── Camera helpers ─────────────────────────────────────────────────────────
+  // â”€â”€ Camera helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function startCamera() {
     errorMsg = ''
     try {
@@ -75,10 +75,10 @@
     if (fileInput) fileInput.value = ''
   }
 
-  // ── ONNX Inference ─────────────────────────────────────────────────────────
+  // â”€â”€ ONNX Inference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   /**
    * HOW TO INTEGRATE YOUR ONNX MODEL
-   * ──────────────────────────────────────────────────────────────────────────
+   * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    * 1. Install the runtime:
    *      pnpm add onnxruntime-web
    *
@@ -92,7 +92,7 @@
    *
    * 4. Pre-process the canvas pixel data into a Float32 tensor:
    *      const imageData = canvasEl.getContext('2d').getImageData(0, 0, 224, 224)
-   *      // Normalize [0,255] → [0,1] and arrange as CHW (channels-first):
+   *      // Normalize [0,255] â†’ [0,1] and arrange as CHW (channels-first):
    *      const tensor = new ort.Tensor('float32', float32Data, [1, 3, 224, 224])
    *
    * 5. Run inference and read the top-1 class + score:
@@ -100,13 +100,12 @@
    *      const scores = Array.from(output.data)
    *      const topIdx = scores.indexOf(Math.max(...scores))
    *      const label = LABELS[topIdx]        // your label map array
-   *      const confidence = scores[topIdx]   // 0–1
+   *      const confidence = scores[topIdx]   // 0â€“1
    *
-   * 6. Map the top class to its nutrition data (calories, protein, carbs, fat)
-   *    using a local JSON lookup table or a small fetch to an edge function.
+   * 6. Decode segmentation boxes, masks, and points, then render the overlay.
    *
-   * The stub below simulates steps 5–6 so the UI flows end-to-end right now.
-   * Replace the body of runInference() with the real implementation above.
+   * The stub below simulates segmentation-shaped output so the UI flows end-to-end right now.
+   * Replace the body of runInference() with the React app inference implementation.
    */
   async function runInference() {
     view = 'analyzing'
@@ -114,17 +113,21 @@
     errorMsg = ''
 
     try {
-      // ── STUB: replace this block with real onnxruntime-web inference ──────
+      // â”€â”€ STUB: replace this block with real onnxruntime-web inference â”€â”€â”€â”€â”€â”€
       await new Promise(r => setTimeout(r, 1800))
       result = {
-        label: 'Green Apple',
+        label: 'Sample segment',
         confidence: 0.91,
-        calories: 95,
-        protein: 0.5,
-        carbs: 25,
-        fat: 0.3,
+        detections: [
+          {
+            label: 'Sample segment',
+            confidence: 0.91,
+            box: { x1: 32, y1: 28, x2: 210, y2: 196, width: 178, height: 168 },
+            points: [[42, 30], [190, 34], [210, 152], [166, 196], [58, 182], [32, 88]],
+          },
+        ],
       }
-      // ── END STUB ──────────────────────────────────────────────────────────
+      // â”€â”€ END STUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
       view = 'result'
     } catch (e) {
@@ -153,7 +156,7 @@
   })
 </script>
 
-<!-- ── Markup ──────────────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Markup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 
 <!-- Hidden canvas for pixel capture -->
 <canvas bind:this={canvasEl} class="hidden-canvas" aria-hidden="true"></canvas>
@@ -168,7 +171,7 @@
   on:change={handleFileUpload}
 />
 
-<!-- ── Onboarding Modal ──────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Onboarding Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 {#if showOnboarding}
   <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
     <div class="modal">
@@ -183,7 +186,7 @@
         <h2 id="onboard-title">Welcome to FoodScan</h2>
       </div>
 
-      <p class="modal-subtitle">Identify any food and get instant nutrition info — entirely on-device.</p>
+      <p class="modal-subtitle">Identify any food and get instant nutrition info â€” entirely on-device.</p>
 
       <ol class="steps">
         <li>
@@ -225,7 +228,7 @@
           </div>
           <div class="step-text">
             <strong>Tap the shutter</strong>
-            <span>Press the large button to capture. The on-device ONNX model analyses the image in seconds — no internet needed.</span>
+            <span>Press the large button to capture. The on-device ONNX model analyses the image in seconds â€” no internet needed.</span>
           </div>
         </li>
         <li>
@@ -251,7 +254,7 @@
   </div>
 {/if}
 
-<!-- ── App Shell ─────────────────────────────────────────────────────────────── -->
+<!-- â”€â”€ App Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <main class="shell">
   <header class="app-header">
     <span class="wordmark">NutriScan</span>
@@ -260,7 +263,7 @@
     {/if}
   </header>
 
-  <!-- ── Idle / Home ──────────────────────────────────────────────────────── -->
+  <!-- â”€â”€ Idle / Home â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   {#if view === 'idle'}
     <section class="home">
       <div class="hero-icon">
@@ -270,7 +273,7 @@
         </svg>
       </div>
       <h1 class="home-title">What are you eating?</h1>
-      <p class="home-sub">Point your camera at any food and get instant nutrition breakdown — processed entirely on your device.</p>
+      <p class="home-sub">Point your camera at any food and get instant nutrition breakdown â€” processed entirely on your device.</p>
 
       <div class="home-actions">
         <button class="btn btn--primary btn--full" on:click={startCamera}>
@@ -295,7 +298,7 @@
     </section>
   {/if}
 
-  <!-- ── Scanning / Viewfinder ─────────────────────────────────────────────── -->
+  <!-- â”€â”€ Scanning / Viewfinder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   {#if view === 'scanning'}
     <section class="viewfinder-wrap">
       <!-- Live feed -->
@@ -324,21 +327,21 @@
     </section>
   {/if}
 
-  <!-- ── Analyzing ─────────────────────────────────────────────────────────── -->
+  <!-- â”€â”€ Analyzing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   {#if view === 'analyzing'}
     <section class="analyzing">
       {#if capturedUrl}
         <img class="thumb" src={capturedUrl} alt="Captured food" />
       {/if}
-      <div class="spinner" aria-label="Analysing image…">
+      <div class="spinner" aria-label="Analysing imageâ€¦">
         <div class="spinner-ring"></div>
       </div>
-      <p class="analyzing-label">Running on-device model…</p>
+      <p class="analyzing-label">Running on-device modelâ€¦</p>
       <p class="analyzing-sub">No data leaves your device</p>
     </section>
   {/if}
 
-  <!-- ── Result ─────────────────────────────────────────────────────────────── -->
+  <!-- â”€â”€ Result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   {#if view === 'result' && result}
     <section class="result">
       {#if capturedUrl}
@@ -351,24 +354,7 @@
           <span class="confidence-chip">{Math.round(result.confidence * 100)}% match</span>
         </div>
 
-        <div class="nutrient-grid">
-          <div class="nutrient-cell">
-            <span class="nutrient-value">{result.calories}</span>
-            <span class="nutrient-name">kcal</span>
-          </div>
-          <div class="nutrient-cell">
-            <span class="nutrient-value">{result.protein}g</span>
-            <span class="nutrient-name">Protein</span>
-          </div>
-          <div class="nutrient-cell">
-            <span class="nutrient-value">{result.carbs}g</span>
-            <span class="nutrient-name">Carbs</span>
-          </div>
-          <div class="nutrient-cell">
-            <span class="nutrient-value">{result.fat}g</span>
-            <span class="nutrient-name">Fat</span>
-          </div>
-        </div>
+        <pre class="result-json">{JSON.stringify(result.detections, null, 2)}</pre>
       </div>
 
       <div class="result-actions">
@@ -380,7 +366,7 @@
 </main>
 
 <style>
-  /* ── Design tokens ─────────────────────────────────────────────────────── */
+  /* â”€â”€ Design tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   :root {
     --bg:         #0e0f0e;
     --surface:    #1a1c1a;
@@ -395,7 +381,7 @@
     color-scheme: dark;
   }
 
-  /* ── Base ──────────────────────────────────────────────────────────────── */
+  /* â”€â”€ Base â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   :global(*, *::before, *::after) { box-sizing: border-box; margin: 0; padding: 0; }
   :global(html, body) {
     background: var(--bg);
@@ -406,7 +392,7 @@
 
   .hidden-canvas { display: none; }
 
-  /* ── Shell ─────────────────────────────────────────────────────────────── */
+  /* â”€â”€ Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .shell {
     display: flex;
     flex-direction: column;
@@ -415,7 +401,7 @@
     margin: 0 auto;
   }
 
-  /* ── Header ────────────────────────────────────────────────────────────── */
+  /* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .app-header {
     display: flex;
     align-items: center;
@@ -430,7 +416,7 @@
     color: var(--accent);
   }
 
-  /* ── Buttons ───────────────────────────────────────────────────────────── */
+  /* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -450,7 +436,7 @@
   .btn--sm       { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
   .btn--full     { width: 100%; justify-content: center; }
 
-  /* ── Home ──────────────────────────────────────────────────────────────── */
+  /* â”€â”€ Home â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .home {
     flex: 1;
     display: flex;
@@ -467,7 +453,7 @@
   .home-actions { display: flex; flex-direction: column; gap: 0.75rem; width: 100%; max-width: 320px; margin-top: 0.5rem; }
   .error-msg { color: var(--warm); font-size: 0.85rem; margin-top: 0.5rem; }
 
-  /* ── Viewfinder ─────────────────────────────────────────────────────────── */
+  /* â”€â”€ Viewfinder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .viewfinder-wrap {
     flex: 1;
     position: relative;
@@ -556,7 +542,7 @@
     background: #fff;
   }
 
-  /* ── Analyzing ─────────────────────────────────────────────────────────── */
+  /* â”€â”€ Analyzing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .analyzing {
     flex: 1;
     display: flex;
@@ -584,7 +570,7 @@
   .analyzing-label { font-weight: 600; font-size: 1rem; }
   .analyzing-sub   { color: var(--text-muted); font-size: 0.82rem; }
 
-  /* ── Result ─────────────────────────────────────────────────────────────── */
+  /* â”€â”€ Result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .result {
     flex: 1;
     display: flex;
@@ -623,25 +609,21 @@
     padding: 0.2rem 0.65rem;
     white-space: nowrap;
   }
-  .nutrient-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.5rem;
-  }
-  .nutrient-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: var(--bg);
+.result-json {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
-    padding: 0.75rem 0.25rem;
-    gap: 0.15rem;
+    padding: 0.85rem;
+    color: var(--text);
+    background: var(--bg);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
   }
-  .nutrient-value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
-  .nutrient-name  { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .result-actions { display: flex; flex-direction: column; gap: 0.75rem; }
 
-  /* ── Onboarding Modal ───────────────────────────────────────────────────── */
+  /* â”€â”€ Onboarding Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   .overlay {
     position: fixed;
     inset: 0;
@@ -728,3 +710,8 @@
   .step-text span   { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
   .step-text em     { font-style: normal; color: var(--accent); }
 </style>
+
+
+
+
+

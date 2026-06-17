@@ -7,8 +7,18 @@ declare const self: ServiceWorkerGlobalScope & {
 }
 
 const CACHE_PREFIX = 'nutriscan-offline'
-const APP_CACHE = `${CACHE_PREFIX}-app-v4`
-const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-v4`
+const APP_CACHE = `${CACHE_PREFIX}-app-v5`
+const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-v5`
+const MODEL_CACHE = `${CACHE_PREFIX}-models-v1`
+
+const MODEL_CACHE_URLS = [
+  '/models/yolo/metadata.json',
+  '/models/yolo/best.onnx',
+  '/models/rfdetr/metadata.json',
+  '/models/rfdetr/rfdetr.onnx',
+]
+
+const MODEL_EXTENSIONS = ['.onnx', '.wasm', '.mjs']
 
 const precacheEntries = self.__WB_MANIFEST
 
@@ -70,11 +80,26 @@ async function cacheAppShell() {
     appShellUrls
       .filter((url) => !criticalShellUrls.includes(url))
       .map(async (url) => {
+        try {
+          const response = await fetch(url, { cache: 'reload' })
+          if (response.ok) await cache.put(url, response)
+        } catch {
+          // A single failed optional asset should not prevent app-shell install.
+        }
+      }),
+  )
+}
+
+async function cacheModelAssets() {
+  const cache = await caches.open(MODEL_CACHE)
+  await Promise.all(
+    MODEL_CACHE_URLS.map(async (path) => {
+      const url = new URL(path, self.registration.scope).toString()
       try {
         const response = await fetch(url, { cache: 'reload' })
         if (response.ok) await cache.put(url, response)
       } catch {
-        // A single failed optional asset should not prevent app-shell install.
+        // Model warmup is best-effort; inference will retry normal fetch later.
       }
     }),
   )
@@ -84,7 +109,7 @@ async function removeOldCaches() {
   const names = await caches.keys()
   await Promise.all(
     names
-      .filter((name) => name.startsWith(CACHE_PREFIX) && name !== APP_CACHE && name !== RUNTIME_CACHE)
+      .filter((name) => name.startsWith(CACHE_PREFIX) && name !== APP_CACHE && name !== RUNTIME_CACHE && name !== MODEL_CACHE)
       .map((name) => caches.delete(name)),
   )
 }
@@ -101,14 +126,20 @@ async function cacheFirst(request: Request) {
 
   const response = await fetch(request)
   if (response.ok) {
-    const cache = await caches.open(RUNTIME_CACHE)
+    const url = new URL(request.url)
+    const cacheName = url.pathname.startsWith('/models/') || MODEL_EXTENSIONS.some((ext) => url.pathname.endsWith(ext))
+      ? MODEL_CACHE
+      : RUNTIME_CACHE
+    const cache = await caches.open(cacheName)
     await cache.put(request, response.clone())
   }
   return response
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(cacheAppShell().then(() => self.skipWaiting()))
+  event.waitUntil(
+    Promise.all([cacheAppShell(), cacheModelAssets()]).then(() => self.skipWaiting()),
+  )
 })
 
 self.addEventListener('activate', (event) => {
@@ -123,7 +154,7 @@ self.addEventListener('message', (event) => {
     void self.skipWaiting()
   }
   if (event.data?.type === 'WARM_CACHE') {
-    event.waitUntil(cacheAppShell())
+    event.waitUntil(Promise.all([cacheAppShell(), cacheModelAssets()]))
   }
 })
 
