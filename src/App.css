@@ -717,6 +717,13 @@ button {
   white-space: nowrap;
 }
 
+.model-chips-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
 .model-chip {
   padding: 6px 16px;
   border-radius: 999px;
@@ -1282,112 +1289,201 @@ button {
   color: #fca5a5;
 }
 
-/* ── Menu bar ─────────────────────────────────────────────────────────────── */
-.menu-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: stretch;
-  background: rgba(8, 16, 30, 0.92);
-  backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(226, 232, 240, 0.08);
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.menu-tab {
-  flex: 1;
+/* ── Hamburger button (top-right of topbar) ───────────────────────────────── */
+.hamburger-button {
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 58px;
-  padding: 8px 4px;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 50%;
   border: none;
-  background: transparent;
-  color: #475569;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px);
   cursor: pointer;
-  position: relative;
-  transition: color 0.15s;
 }
 
-.menu-tab--active {
-  color: #67e8f9;
+.hamburger-button span {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  width: 100%;
+  transition: opacity 0.15s;
 }
 
-.menu-tab--install {
-  color: #94a3b8;
+/* ── Side menu backdrop ───────────────────────────────────────────────────── */
+.side-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(3px);
 }
 
-.menu-tab--active .menu-icon {
-  stroke: #67e8f9;
+/* ── Side menu panel ──────────────────────────────────────────────────────── */
+.side-menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  width: min(320px, 88vw);
+  background: #0a1120;
+  border-left: 1px solid rgba(226,232,240,0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.menu-icon {
+.side-menu--open {
+  transform: translateX(0);
+}
+
+.side-menu-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.75rem;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  border-bottom: 1px solid rgba(226,232,240,0.08);
+}
+
+.side-menu-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.side-menu-logo {
   width: 22px;
   height: 22px;
-  stroke: currentColor;
+  stroke: #67e8f9;
   stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.side-menu-brand-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.side-menu-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(226,232,240,0.12);
+  background: rgba(255,255,255,0.05);
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.side-menu-close svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* ── Install button inside side menu ─────────────────────────────────────── */
+.side-menu-install {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1rem 1rem 0;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(103,232,249,0.25);
+  background: rgba(103,232,249,0.08);
+  color: #67e8f9;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.side-menu-install:active {
+  background: rgba(103,232,249,0.14);
+}
+
+.side-menu-install svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
   flex-shrink: 0;
 }
 
-/* Camera icon is filled, not stroked */
-.menu-tab:first-child .menu-icon {
-  fill: currentColor;
-  stroke: none;
-}
-
-.menu-label {
+/* ── History section inside side menu ────────────────────────────────────── */
+.side-menu-section-label {
+  flex: 0 0 auto;
+  padding: 1rem 1rem 0.4rem;
   font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
-
-.menu-badge {
-  position: absolute;
-  top: 6px;
-  right: calc(50% - 18px);
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 0.58rem;
   font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.side-menu-stats {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem 0.75rem;
+  font-size: 0.78rem;
+  color: #64748b;
+  border-bottom: 1px solid rgba(226,232,240,0.06);
+}
+
+.side-menu-clear {
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(239,68,68,0.3);
+  background: rgba(239,68,68,0.08);
+  color: #f87171;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.side-menu-empty {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
+  margin: 0;
+  padding: 2rem 1.25rem;
+  color: #475569;
+  font-size: 0.85rem;
+  text-align: center;
 }
 
-/* ── Model chips row ──────────────────────────────────────────────────────── */
-.model-chips-row {
+.side-menu-history-list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 max(1rem, env(safe-area-inset-bottom));
   display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── Adjust model picker and controls bottom offset for menu bar ─────────── */
-.model-picker-bar {
-  bottom: calc(80px + env(safe-area-inset-bottom));
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.controls-row {
-  padding-bottom: calc(68px + env(safe-area-inset-bottom));
-}
-
-/* ── History panel full height (minus menu bar) ───────────────────────────── */
-.history-panel {
-  bottom: calc(58px + env(safe-area-inset-bottom));
+  gap: 2px;
 }

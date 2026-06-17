@@ -23,8 +23,6 @@ type ScanRecord = {
   result: SegmentResult
 }
 
-type Tab = 'scan' | 'history'
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const HISTORY_KEY = 'nutriscan_segmentation_history'
@@ -235,7 +233,7 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const pickerOpenRef = useRef(false)
 
-  const [activeTab, setActiveTab] = useState<Tab>('scan')
+  const [sideMenuOpen, setSideMenuOpen] = useState(false)
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -320,16 +318,6 @@ function App() {
     warmSegmentationModels().catch(() => { /* warm silently */ })
     return () => stopCamera()
   }, [startCamera, stopCamera])
-
-  // Stop/resume camera when switching tabs
-  useEffect(() => {
-    if (activeTab === 'scan') {
-      if (!isCameraActive) startCamera()
-    } else {
-      stopCamera()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
 
   // Analyze image
   const analyzeImage = useCallback(async (dataUrl: string, source: ScanRecord['source']) => {
@@ -431,24 +419,25 @@ function App() {
       {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
 
       <main className="camera-app" aria-label="NutriScan food scanner">
-
-        {/* ── Scan tab ── */}
-        <section
-          className="camera-stage"
-          aria-label="Camera preview"
-          aria-hidden={activeTab !== 'scan'}
-          style={{ display: activeTab === 'scan' ? undefined : 'none' }}
-        >
+        <section className="camera-stage" aria-label="Camera preview">
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
           <canvas ref={overlayCanvasRef} className="hidden-canvas" aria-hidden="true" />
 
-          {/* Status pill */}
+          {/* Top bar: status pill left, hamburger right */}
           <div className="topbar-overlay">
             <div className="status-pill">
               <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
               <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
             </div>
+            <button
+              type="button"
+              className="hamburger-button"
+              aria-label="Open menu"
+              onClick={() => setSideMenuOpen(true)}
+            >
+              <span /><span /><span />
+            </button>
           </div>
 
           {/* Viewfinder */}
@@ -599,92 +588,77 @@ function App() {
           />
         </section>
 
-        {/* ── History tab ── */}
-        {activeTab === 'history' && (
-          <section className="history-panel" aria-label="Scan history">
-            <div className="history-header">
-              <div>
-                <h2 className="history-title">Scan History</h2>
-                <p className="history-subtitle">
-                  {stats.scans} scan{stats.scans !== 1 ? 's' : ''} &middot; {stats.detections} detection{stats.detections !== 1 ? 's' : ''}
-                </p>
-              </div>
-              {scanHistory.length > 0 && (
-                <button
-                  type="button"
-                  className="history-clear"
-                  onClick={() => { setScanHistory([]); saveHistory([]) }}
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
-
-            {scanHistory.length === 0 ? (
-              <p className="history-empty">No scans yet. Switch to Scan and take a photo to get started.</p>
-            ) : (
-              <ul className="history-list">
-                {scanHistory.map((item) => (
-                  <li key={item.id}>
-                    <HistoryCard record={item} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        {/* ── Side menu panel ── */}
+        {sideMenuOpen && (
+          <div
+            className="side-menu-backdrop"
+            aria-hidden="true"
+            onClick={() => setSideMenuOpen(false)}
+          />
         )}
-
-        {/* ── Bottom menu bar ── */}
-        <nav className="menu-bar" aria-label="Main navigation">
-          <button
-            type="button"
-            className={`menu-tab${activeTab === 'scan' ? ' menu-tab--active' : ''}`}
-            onClick={() => setActiveTab('scan')}
-            aria-current={activeTab === 'scan' ? 'page' : undefined}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
-            <span className="menu-label">Scan</span>
-          </button>
-
-          <button
-            type="button"
-            className={`menu-tab${activeTab === 'history' ? ' menu-tab--active' : ''}`}
-            onClick={() => setActiveTab('history')}
-            aria-current={activeTab === 'history' ? 'page' : undefined}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
-              <path d="M12 8v4l3 3" />
-              <path d="M3.05 11a9 9 0 1 1 .5 4" />
-              <polyline points="3 16 3 11 8 11" />
-            </svg>
-            {scanHistory.length > 0 && (
-              <span className="menu-badge" aria-label={`${scanHistory.length} saved scans`}>
-                {scanHistory.length > 99 ? '99+' : scanHistory.length}
-              </span>
-            )}
-            <span className="menu-label">History</span>
-          </button>
-
-          {/* Install button — hidden when running as PWA */}
-          {!isPwa && installPrompt && (
+        <aside
+          className={`side-menu${sideMenuOpen ? ' side-menu--open' : ''}`}
+          aria-label="Menu"
+        >
+          <div className="side-menu-header">
+            <div className="side-menu-brand">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="side-menu-logo">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span className="side-menu-brand-name">NutriScan</span>
+            </div>
             <button
               type="button"
-              className="menu-tab menu-tab--install"
-              onClick={handleInstall}
-              aria-label="Install app"
+              className="side-menu-close"
+              aria-label="Close menu"
+              onClick={() => setSideMenuOpen(false)}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true" className="menu-icon">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              <span className="menu-label">Install</span>
+            </button>
+          </div>
+
+          {/* Install button — hidden when already a PWA */}
+          {!isPwa && installPrompt && (
+            <button type="button" className="side-menu-install" onClick={handleInstall}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15V3m0 12-4-4m4 4 4-4" />
+                <path d="M2 17v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2" />
+              </svg>
+              Download App
             </button>
           )}
-        </nav>
+
+          <div className="side-menu-section-label">Scan History</div>
+          <div className="side-menu-stats">
+            {stats.scans} scan{stats.scans !== 1 ? 's' : ''}&nbsp;&middot;&nbsp;{stats.detections} detection{stats.detections !== 1 ? 's' : ''}
+            {scanHistory.length > 0 && (
+              <button
+                type="button"
+                className="side-menu-clear"
+                onClick={() => { setScanHistory([]); saveHistory([]) }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {scanHistory.length === 0 ? (
+            <p className="side-menu-empty">No scans yet. Take a photo to get started.</p>
+          ) : (
+            <ul className="side-menu-history-list">
+              {scanHistory.map((item) => (
+                <li key={item.id}>
+                  <HistoryCard record={item} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+
       </main>
     </div>
   )
