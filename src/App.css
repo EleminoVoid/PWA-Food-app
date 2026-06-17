@@ -289,7 +289,7 @@ button { border: 0; cursor: pointer; }
   color: var(--text-secondary);
 }
 
-/* ── Error banner ───────────────────────────────────────────────────────── */
+/* ── Error banner ────────────────────────────────────────────────────────��� */
 .error-banner {
   position: absolute;
   bottom: 120px;
@@ -949,13 +949,20 @@ button { border: 0; cursor: pointer; }
 .tutorial-dim {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.75);
+  background: rgba(0,0,0,0.6);
   pointer-events: all;
 }
 .tutorial-spot {
   position: absolute;
   background: transparent;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,0.75);
+  /* overlay matches .tutorial-dim so they don't stack darker */
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
+  /* amber box outline so the target element is clearly framed */
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 12px;
+  /* soft amber glow to lift the spot off the dim */
+  filter: drop-shadow(0 0 8px rgba(245,158,11,0.55));
   pointer-events: none;
   transition: top 0.25s cubic-bezier(0.4,0,0.2,1),
               left 0.25s cubic-bezier(0.4,0,0.2,1),
