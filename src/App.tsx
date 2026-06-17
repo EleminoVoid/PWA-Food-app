@@ -284,7 +284,6 @@ function App() {
   const pickerOpenRef = useRef(false)
 
   const [isCameraActive, setIsCameraActive] = useState(false)
-  const [pendingImage, setPendingImage] = useState('')
   const [resultRecord, setResultRecord] = useState<ScanRecord | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding())
@@ -381,17 +380,9 @@ function App() {
     if (!ctx) { setErrorMessage('Unable to prepare the photo buffer.'); return }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
-    // Hold as pending — user must confirm or retake
-    setPendingImage(dataUrl)
-    setErrorMessage('')
-  }
-
-  const confirmPhoto = (source: ScanRecord['source'] = 'camera') => {
-    if (!pendingImage) return
-    const record = createRecord(pendingImage, source, Date.now())
-    // Show the result screen first — user saves to history from there
+    const record = createRecord(dataUrl, 'camera', Date.now())
     setResultRecord(record)
-    setPendingImage('')
+    setErrorMessage('')
     // ── TODO: replace createRecord() with ONNX inference output here ─────────
   }
 
@@ -401,12 +392,7 @@ function App() {
     setResultRecord(null)
   }
 
-  const discardResult = () => setResultRecord(null)
-
-  const retakePhoto = () => {
-    setPendingImage('')
-    setErrorMessage('')
-  }
+  const takeAnother = () => setResultRecord(null)
 
   // ── Gallery upload ───────────────────────────────────────────────────────────
 
@@ -534,18 +520,7 @@ function App() {
             <p className="install-message" role="status">{installMessage}</p>
           )}
 
-          {/* Pending review overlay */}
-          {pendingImage && (
-            <div className="pending-overlay" aria-live="polite">
-              <img className="pending-preview" src={pendingImage} alt="Captured photo awaiting confirmation" />
-              <div className="pending-actions">
-                <button type="button" className="btn-retake" onClick={retakePhoto}>Retake</button>
-                <button type="button" className="btn-use" onClick={() => confirmPhoto('camera')}>Use Photo</button>
-              </div>
-            </div>
-          )}
-
-          {/* Result overlay — shown after confirming a photo */}
+          {/* Result overlay — shown immediately after capturing or uploading */}
           {resultRecord && (
             <div className="result-overlay" role="dialog" aria-label="Scan result">
               <img
@@ -569,8 +544,8 @@ function App() {
                 )}
 
                 <div className="result-sheet-actions">
-                  <button type="button" className="btn-retake" onClick={discardResult}>
-                    Discard
+                  <button type="button" className="btn-retake" onClick={takeAnother}>
+                    Take Another
                   </button>
                   <button type="button" className="btn-use" onClick={saveResult}>
                     Save to History
@@ -580,8 +555,8 @@ function App() {
             </div>
           )}
 
-          {/* Bottom controls — hidden during review or result */}
-          {!pendingImage && !resultRecord && (
+          {/* Bottom controls — hidden while result card is showing */}
+          {!resultRecord && (
             <div className="controls-row">
               <button
                 type="button"
