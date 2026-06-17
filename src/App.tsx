@@ -23,11 +23,51 @@ type ScanRecord = {
   result: SegmentResult
 }
 
+type TutorialStep = {
+  targetId: string
+  title: string
+  body: string
+  position: 'above' | 'below' | 'left' | 'right'
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const HISTORY_KEY = 'nutriscan_segmentation_history'
 const ONBOARDING_KEY = 'nutriscan_onboarded'
 const SELECTED_MODEL_KEY = 'nutriscan_selected_model'
+
+const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    targetId: 'tut-status',
+    title: 'Connection status',
+    body: 'Shows whether the app is online or offline. Inference runs entirely on-device so it works offline too.',
+    position: 'below',
+  },
+  {
+    targetId: 'tut-help',
+    title: 'Help button',
+    body: 'Tap this any time to replay this tutorial.',
+    position: 'below',
+  },
+  {
+    targetId: 'tut-hamburger',
+    title: 'Menu',
+    body: 'Opens the side panel — scan history, model settings, confidence threshold, and the app install button.',
+    position: 'below',
+  },
+  {
+    targetId: 'tut-gallery',
+    title: 'Upload from gallery',
+    body: 'Pick an existing photo from your library instead of using the live camera.',
+    position: 'above',
+  },
+  {
+    targetId: 'tut-shutter',
+    title: 'Shutter button',
+    body: 'Tap to capture a frame. The ONNX model segments the food directly on your device.',
+    position: 'above',
+  },
+]
 
 const STEPS = [
   {
@@ -145,6 +185,109 @@ function labelToDisplay(label: string) {
   return label.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// ── Tutorial overlay ──────────────────────────────────────────────────────────
+
+function TutorialOverlay({
+  steps,
+  onDone,
+}: {
+  steps: TutorialStep[]
+  onDone: () => void
+}) {
+  const [stepIndex, setStepIndex] = useState(0)
+  const [bubbleStyle, setBubbleStyle] = useState<React.CSSProperties>({})
+  const [spotStyle, setSpotStyle] = useState<React.CSSProperties>({})
+  const [arrowDir, setArrowDir] = useState<'above' | 'below' | 'left' | 'right'>('below')
+  const bubbleRef = useRef<HTMLDivElement | null>(null)
+
+  const current = steps[stepIndex]
+  const isLast = stepIndex === steps.length - 1
+
+  useEffect(() => {
+    const el = document.querySelector(`[data-tutorial-id="${current.targetId}"]`)
+    if (!el) return
+
+    const rect = el.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const PAD = 8
+
+    // Spotlight
+    setSpotStyle({
+      top: rect.top - PAD,
+      left: rect.left - PAD,
+      width: rect.width + PAD * 2,
+      height: rect.height + PAD * 2,
+      borderRadius: 12,
+    })
+
+    // Bubble positioning — flip if near edge
+    const BUBBLE_W = Math.min(260, vw - 32)
+    const BUBBLE_H = 140
+    const ARROW_SIZE = 10
+    let pos = current.position
+
+    if (pos === 'below' && rect.bottom + BUBBLE_H + ARROW_SIZE + 16 > vh) pos = 'above'
+    if (pos === 'above' && rect.top - BUBBLE_H - ARROW_SIZE - 16 < 0) pos = 'below'
+
+    setArrowDir(pos)
+
+    let top: number
+    let left: number
+
+    if (pos === 'below') {
+      top = rect.bottom + ARROW_SIZE + 8
+      left = rect.left + rect.width / 2 - BUBBLE_W / 2
+    } else if (pos === 'above') {
+      top = rect.top - BUBBLE_H - ARROW_SIZE - 8
+      left = rect.left + rect.width / 2 - BUBBLE_W / 2
+    } else if (pos === 'left') {
+      top = rect.top + rect.height / 2 - BUBBLE_H / 2
+      left = rect.left - BUBBLE_W - ARROW_SIZE - 8
+    } else {
+      top = rect.top + rect.height / 2 - BUBBLE_H / 2
+      left = rect.right + ARROW_SIZE + 8
+    }
+
+    // Clamp to viewport
+    left = Math.max(16, Math.min(left, vw - BUBBLE_W - 16))
+    top = Math.max(16, Math.min(top, vh - BUBBLE_H - 16))
+
+    setBubbleStyle({ top, left, width: BUBBLE_W })
+  }, [stepIndex, current])
+
+  const advance = () => {
+    if (isLast) onDone()
+    else setStepIndex((i) => i + 1)
+  }
+
+  return (
+    <div className="tutorial-root" role="dialog" aria-modal="true" aria-label="Tutorial">
+      {/* Dark overlay with a cut-out hole for the target element */}
+      <div className="tutorial-dim" aria-hidden="true" />
+      <div className="tutorial-spot" style={spotStyle} aria-hidden="true" />
+
+      {/* Bubble */}
+      <div
+        ref={bubbleRef}
+        className={`tutorial-bubble tutorial-bubble--${arrowDir}`}
+        style={bubbleStyle}
+      >
+        <div className="tutorial-progress">
+          {steps.map((_, i) => (
+            <span key={i} className={`tutorial-pip${i === stepIndex ? ' tutorial-pip--active' : ''}`} />
+          ))}
+        </div>
+        <strong className="tutorial-title">{current.title}</strong>
+        <p className="tutorial-body">{current.body}</p>
+        <button type="button" className="tutorial-next" onClick={advance}>
+          {isLast ? 'Done' : 'Next'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
@@ -234,6 +377,7 @@ function App() {
   const pickerOpenRef = useRef(false)
 
   const [sideMenuOpen, setSideMenuOpen] = useState(false)
+  const [tutorialActive, setTutorialActive] = useState(false)
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -254,15 +398,12 @@ function App() {
     detections: scanHistory.reduce((sum, r) => sum + r.result.detections.length, 0),
   }), [scanHistory])
 
-  // Persist history
   useEffect(() => { saveHistory(scanHistory) }, [scanHistory])
 
-  // Persist selected model
   useEffect(() => {
     try { localStorage.setItem(SELECTED_MODEL_KEY, selectedModel) } catch { /* noop */ }
   }, [selectedModel])
 
-  // Online / offline
   useEffect(() => {
     const on = () => setIsOnline(true)
     const off = () => setIsOnline(false)
@@ -271,7 +412,6 @@ function App() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
-  // Install prompt — don't show if already running as PWA
   useEffect(() => {
     if (isPwa) return
     const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e as BeforeInstallPromptEvent) }
@@ -284,7 +424,6 @@ function App() {
     }
   }, [isPwa])
 
-  // Camera
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
@@ -312,14 +451,12 @@ function App() {
     }
   }, [stopCamera])
 
-  // Start camera on mount and warm models
   useEffect(() => {
     startCamera()
     warmSegmentationModels().catch(() => { /* warm silently */ })
     return () => stopCamera()
   }, [startCamera, stopCamera])
 
-  // Analyze image
   const analyzeImage = useCallback(async (dataUrl: string, source: ScanRecord['source']) => {
     setIsAnalyzing(true)
     setErrorMessage('')
@@ -369,11 +506,7 @@ function App() {
     pickerOpenRef.current = true
     setErrorMessage('')
     const handleFocus = () => {
-      setTimeout(() => {
-        if (pickerOpenRef.current) {
-          pickerOpenRef.current = false
-        }
-      }, 600)
+      setTimeout(() => { pickerOpenRef.current = false }, 600)
       window.removeEventListener('focus', handleFocus)
     }
     window.addEventListener('focus', handleFocus)
@@ -418,26 +551,46 @@ function App() {
     <div className="app-shell">
       {showOnboarding && <OnboardingModal onDismiss={dismissOnboarding} />}
 
+      {tutorialActive && (
+        <TutorialOverlay steps={TUTORIAL_STEPS} onDone={() => setTutorialActive(false)} />
+      )}
+
       <main className="camera-app" aria-label="NutriScan food scanner">
         <section className="camera-stage" aria-label="Camera preview">
           <video ref={videoRef} className="camera-video" muted autoPlay playsInline />
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
           <canvas ref={overlayCanvasRef} className="hidden-canvas" aria-hidden="true" />
 
-          {/* Top bar: status pill left, hamburger right */}
+          {/* Top bar */}
           <div className="topbar-overlay">
-            <div className="status-pill">
+            <div className="status-pill" data-tutorial-id="tut-status">
               <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
               <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
             </div>
-            <button
-              type="button"
-              className="hamburger-button"
-              aria-label="Open menu"
-              onClick={() => setSideMenuOpen(true)}
-            >
-              <span /><span /><span />
-            </button>
+            <div className="topbar-right">
+              <button
+                type="button"
+                className="topbar-icon-button"
+                aria-label="Help / tutorial"
+                data-tutorial-id="tut-help"
+                onClick={() => setTutorialActive(true)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="hamburger-button"
+                aria-label="Open menu"
+                data-tutorial-id="tut-hamburger"
+                onClick={() => setSideMenuOpen(true)}
+              >
+                <span /><span /><span />
+              </button>
+            </div>
           </div>
 
           {/* Viewfinder */}
@@ -466,39 +619,6 @@ function App() {
           {/* Error banner */}
           {errorMessage && !isAnalyzing && (
             <p className="error-message" role="alert">{errorMessage}</p>
-          )}
-
-          {/* Model picker — idle only */}
-          {!resultRecord && !isAnalyzing && (
-            <div className="model-picker-bar">
-              <div className="model-chips-row">
-                {MODEL_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={`model-chip${selectedModel === opt.id ? ' model-chip--active' : ''}`}
-                    onClick={() => setSelectedModel(opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <div className="confidence-row">
-                <label htmlFor="conf-slider" className="conf-label">
-                  Confidence&nbsp;<span className="conf-value">{(confidenceThreshold * 100).toFixed(0)}%</span>
-                </label>
-                <input
-                  id="conf-slider"
-                  type="range"
-                  min="0.1"
-                  max="0.9"
-                  step="0.05"
-                  value={confidenceThreshold}
-                  onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-                  className="conf-slider"
-                />
-              </div>
-            </div>
           )}
 
           {/* Result overlay */}
@@ -551,6 +671,7 @@ function App() {
                 onClick={openGallery}
                 aria-label="Upload from gallery"
                 disabled={isAnalyzing}
+                data-tutorial-id="tut-gallery"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" className="gallery-icon">
                   <rect x="3" y="3" width="18" height="18" rx="3" />
@@ -565,6 +686,7 @@ function App() {
                 onClick={capturePhoto}
                 aria-label="Take photo"
                 disabled={isAnalyzing}
+                data-tutorial-id="tut-shutter"
               >
                 {isAnalyzing ? (
                   <span className="capture-spinner" aria-hidden="true" />
@@ -632,6 +754,40 @@ function App() {
             </button>
           )}
 
+          {/* Model + settings */}
+          <div className="side-menu-section-label">Model</div>
+          <div className="side-menu-model-chips">
+            {MODEL_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`side-model-chip${selectedModel === opt.id ? ' side-model-chip--active' : ''}`}
+                onClick={() => setSelectedModel(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="side-menu-section-label">Settings</div>
+          <div className="side-setting-row">
+            <label htmlFor="side-conf-slider" className="side-setting-label">
+              Confidence threshold
+              <span className="side-setting-value">{(confidenceThreshold * 100).toFixed(0)}%</span>
+            </label>
+            <input
+              id="side-conf-slider"
+              type="range"
+              min="0.1"
+              max="0.9"
+              step="0.05"
+              value={confidenceThreshold}
+              onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+              className="side-slider"
+            />
+          </div>
+
+          {/* History */}
           <div className="side-menu-section-label">Scan History</div>
           <div className="side-menu-stats">
             {stats.scans} scan{stats.scans !== 1 ? 's' : ''}&nbsp;&middot;&nbsp;{stats.detections} detection{stats.detections !== 1 ? 's' : ''}

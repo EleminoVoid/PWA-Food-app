@@ -703,26 +703,8 @@ button {
   font-weight: 500;
 }
 
-/* ── Model picker bar ─────────────────────────────────────────────────────── */
-.model-picker-bar {
-  position: absolute;
-  bottom: calc(112px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
-
-.model-chips-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-}
+/* ── Model picker bar (kept for reference, controls now in side menu) ─────── */
+.model-picker-bar { display: none; }
 
 .model-chip {
   padding: 6px 16px;
@@ -1289,7 +1271,227 @@ button {
   color: #fca5a5;
 }
 
-/* ── Hamburger button (top-right of topbar) ───────────────────────────────── */
+/* ── Topbar icon button (help) ────────────────────────────────────────────── */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  color: #e2e8f0;
+}
+
+.topbar-icon-button svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* ── Tutorial overlay ─────────────────────────────────────────────────────── */
+.tutorial-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Full-screen dim — blocks all touch/click */
+.tutorial-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: all;
+}
+
+/* Punched-out spotlight on the target element */
+.tutorial-spot {
+  position: absolute;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+  pointer-events: none;
+  transition: top 0.25s cubic-bezier(0.4,0,0.2,1),
+              left 0.25s cubic-bezier(0.4,0,0.2,1),
+              width 0.25s cubic-bezier(0.4,0,0.2,1),
+              height 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Bubble card */
+.tutorial-bubble {
+  position: absolute;
+  background: #0f172a;
+  border: 1px solid rgba(103,232,249,0.25);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: all;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  transition: top 0.25s cubic-bezier(0.4,0,0.2,1),
+              left 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Arrow via ::before pseudo-element */
+.tutorial-bubble::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #0f172a;
+  border: 1px solid rgba(103,232,249,0.25);
+  transform: rotate(45deg);
+}
+
+.tutorial-bubble--below::before {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-bottom: none;
+  border-right: none;
+}
+
+.tutorial-bubble--above::before {
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-top: none;
+  border-left: none;
+}
+
+.tutorial-bubble--right::before {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-top: none;
+  border-right: none;
+}
+
+.tutorial-bubble--left::before {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-bottom: none;
+  border-left: none;
+}
+
+/* Progress pips */
+.tutorial-progress {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.tutorial-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background 0.2s, width 0.2s;
+}
+
+.tutorial-pip--active {
+  width: 18px;
+  border-radius: 3px;
+  background: #67e8f9;
+}
+
+.tutorial-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.tutorial-body {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.tutorial-next {
+  align-self: flex-end;
+  padding: 7px 18px;
+  border-radius: 999px;
+  border: none;
+  background: #67e8f9;
+  color: #0a1120;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: all;
+  transition: opacity 0.15s;
+}
+
+.tutorial-next:active { opacity: 0.8; }
+
+/* ── Side menu settings section ───────────────────────────────────────────── */
+.side-menu-model-chips {
+  display: flex;
+  gap: 6px;
+  padding: 0 1rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.side-model-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(226,232,240,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.side-model-chip--active {
+  background: rgba(103,232,249,0.12);
+  border-color: rgba(103,232,249,0.45);
+  color: #67e8f9;
+}
+
+.side-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 1rem 1rem;
+  border-bottom: 1px solid rgba(226,232,240,0.06);
+}
+
+.side-setting-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.side-setting-value {
+  color: #67e8f9;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-slider {
+  width: 100%;
+  accent-color: #67e8f9;
+  cursor: pointer;
+}
 .hamburger-button {
   display: flex;
   flex-direction: column;
