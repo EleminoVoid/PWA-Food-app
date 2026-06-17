@@ -186,8 +186,7 @@ function getFriendlyAccuracy(score: number): string {
 function TutorialOverlay({ steps, onDone }: { steps: TutorialStep[]; onDone: () => void }) {
   const [stepIndex, setStepIndex] = useState(0)
   const [bubbleStyle, setBubbleStyle] = useState<React.CSSProperties>({})
-  const [spotStyle, setSpotStyle] = useState<React.CSSProperties>({})
-  const [arrowDir, setArrowDir] = useState<TutorialStep['position']>('below')
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const current = steps[stepIndex]
   const isLast = stepIndex === steps.length - 1
@@ -198,40 +197,89 @@ function TutorialOverlay({ steps, onDone }: { steps: TutorialStep[]; onDone: () 
     const rect = el.getBoundingClientRect()
     const vw = window.innerWidth
     const vh = window.innerHeight
-    const PAD = 10
+    const PAD = 12
 
-    setSpotStyle({
-      top: rect.top - PAD,
-      left: rect.left - PAD,
-      width: rect.width + PAD * 2,
-      height: rect.height + PAD * 2,
-      borderRadius: 14,
-    })
+    // Draw feathered spotlight on canvas
+    const canvas = canvasRef.current
+    if (canvas) {
+      canvas.width = vw
+      canvas.height = vh
+      const ctx = canvas.getContext('2d')!
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      const rw = rect.width / 2 + PAD
+      const rh = rect.height / 2 + PAD
+      const feather = Math.min(rw, rh) * 0.55
 
+      // Fill dark overlay
+      ctx.clearRect(0, 0, vw, vh)
+      ctx.fillStyle = 'rgba(0,0,0,0.72)'
+      ctx.fillRect(0, 0, vw, vh)
+
+      // Punch a feathered elliptical hole using destination-out
+      ctx.save()
+      ctx.globalCompositeOperation = 'destination-out'
+      const grad = ctx.createRadialGradient(cx, cy, Math.max(rw, rh) * 0.3, cx, cy, Math.max(rw, rh) + feather)
+      grad.addColorStop(0, 'rgba(0,0,0,1)')
+      grad.addColorStop(0.6, 'rgba(0,0,0,0.9)')
+      grad.addColorStop(1, 'rgba(0,0,0,0)')
+      // Scale to match the element's aspect ratio
+      ctx.scale(1, rh / rw)
+      ctx.beginPath()
+      ctx.arc(cx, cy * (rw / rh), rw + feather * 0.8, 0, Math.PI * 2)
+      ctx.fillStyle = grad
+      ctx.fill()
+      ctx.restore()
+
+      // Amber rounded-rect border on top
+      ctx.save()
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.strokeStyle = '#f59e0b'
+      ctx.lineWidth = 2
+      ctx.shadowColor = 'rgba(245,158,11,0.6)'
+      ctx.shadowBlur = 10
+      const bx = rect.left - PAD, by = rect.top - PAD
+      const bw = rect.width + PAD * 2, bh = rect.height + PAD * 2
+      const r = 14
+      ctx.beginPath()
+      ctx.moveTo(bx + r, by)
+      ctx.lineTo(bx + bw - r, by)
+      ctx.arcTo(bx + bw, by, bx + bw, by + r, r)
+      ctx.lineTo(bx + bw, by + bh - r)
+      ctx.arcTo(bx + bw, by + bh, bx + bw - r, by + bh, r)
+      ctx.lineTo(bx + r, by + bh)
+      ctx.arcTo(bx, by + bh, bx, by + bh - r, r)
+      ctx.lineTo(bx, by + r)
+      ctx.arcTo(bx, by, bx + r, by, r)
+      ctx.closePath()
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // Position bubble
     const BUBBLE_W = Math.min(270, vw - 32)
     const BUBBLE_H = 150
-    const ARROW = 10
     let pos = current.position
-    if (pos === 'below' && rect.bottom + BUBBLE_H + ARROW + 16 > vh) pos = 'above'
-    if (pos === 'above' && rect.top - BUBBLE_H - ARROW - 16 < 0) pos = 'below'
-    setArrowDir(pos)
+    if (pos === 'below' && rect.bottom + BUBBLE_H + 16 > vh) pos = 'above'
+    if (pos === 'above' && rect.top - BUBBLE_H - 16 < 0) pos = 'below'
 
     let top: number, left: number
-    if (pos === 'below') { top = rect.bottom + ARROW + 8; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
-    else if (pos === 'above') { top = rect.top - BUBBLE_H - ARROW - 8; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
-    else if (pos === 'left') { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.left - BUBBLE_W - ARROW - 8 }
-    else { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.right + ARROW + 8 }
+    if (pos === 'below') { top = rect.bottom + PAD + 10; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
+    else if (pos === 'above') { top = rect.top - PAD - BUBBLE_H - 10; left = rect.left + rect.width / 2 - BUBBLE_W / 2 }
+    else if (pos === 'left') { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.left - BUBBLE_W - PAD - 10 }
+    else { top = rect.top + rect.height / 2 - BUBBLE_H / 2; left = rect.right + PAD + 10 }
 
     left = Math.max(16, Math.min(left, vw - BUBBLE_W - 16))
-    top = Math.max(16, Math.min(top, vh - BUBBLE_H - 16))
+    top  = Math.max(16, Math.min(top,  vh - BUBBLE_H - 16))
     setBubbleStyle({ top, left, width: BUBBLE_W })
   }, [stepIndex, current])
 
   return (
     <div className="tutorial-root" role="dialog" aria-modal="true" aria-label="App guide">
-      <div className="tutorial-dim" aria-hidden="true" />
-      <div className="tutorial-spot" style={spotStyle} aria-hidden="true" />
-      <div className={`tutorial-bubble tutorial-bubble--${arrowDir}`} style={bubbleStyle}>
+      <canvas ref={canvasRef} className="tutorial-canvas" aria-hidden="true" />
+      {/* Invisible click-blocker that sits on top of the canvas but below the bubble */}
+      <div className="tutorial-blocker" aria-hidden="true" />
+      <div className="tutorial-bubble" style={bubbleStyle}>
         <div className="tutorial-progress">
           {steps.map((_, i) => (
             <span key={i} className={`tutorial-pip${i === stepIndex ? ' tutorial-pip--active' : ''}`} />

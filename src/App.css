@@ -946,35 +946,25 @@ button { border: 0; cursor: pointer; }
   z-index: 100;
   pointer-events: none;
 }
-.tutorial-dim {
+.tutorial-canvas {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.6);
-  pointer-events: all;
-}
-.tutorial-spot {
-  position: absolute;
-  background: transparent;
-  /* overlay matches .tutorial-dim so they don't stack darker */
-  box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
-  /* amber box outline so the target element is clearly framed */
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
-  border-radius: 12px;
-  /* soft amber glow to lift the spot off the dim */
-  filter: drop-shadow(0 0 8px rgba(245,158,11,0.55));
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  transition: top 0.25s cubic-bezier(0.4,0,0.2,1),
-              left 0.25s cubic-bezier(0.4,0,0.2,1),
-              width 0.25s cubic-bezier(0.4,0,0.2,1),
-              height 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+/* blocks all taps outside the bubble */
+.tutorial-blocker {
+  position: absolute;
+  inset: 0;
+  pointer-events: all;
 }
 .tutorial-bubble {
   position: absolute;
   background: var(--surface-2);
   border: 1px solid var(--amber-border);
   border-radius: 18px;
-  padding: 16px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -983,19 +973,6 @@ button { border: 0; cursor: pointer; }
   transition: top 0.25s cubic-bezier(0.4,0,0.2,1),
               left 0.25s cubic-bezier(0.4,0,0.2,1);
 }
-.tutorial-bubble::before {
-  content: '';
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--amber-border);
-  transform: rotate(45deg);
-}
-.tutorial-bubble--below::before  { top: -7px; left: 50%; transform: translateX(-50%) rotate(45deg); border-bottom: none; border-right: none; }
-.tutorial-bubble--above::before  { bottom: -7px; left: 50%; transform: translateX(-50%) rotate(45deg); border-top: none; border-left: none; }
-.tutorial-bubble--right::before  { left: -7px; top: 50%; transform: translateY(-50%) rotate(45deg); border-top: none; border-right: none; }
-.tutorial-bubble--left::before   { right: -7px; top: 50%; transform: translateY(-50%) rotate(45deg); border-bottom: none; border-left: none; }
 
 .tutorial-progress {
   display: flex;
