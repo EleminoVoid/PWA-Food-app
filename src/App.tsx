@@ -137,9 +137,13 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null)
 
   const [isCameraActive, setIsCameraActive] = useState(false)
+  // pendingImage: the photo the user just took — held until they confirm or retake
+  const [pendingImage, setPendingImage] = useState<string>('')
   const [latestImage, setLatestImage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [showOnboarding, setShowOnboarding] = useState(false)
+  // true while the file picker is open, so we can detect a dismissed picker
+  const [pickerOpened, setPickerOpened] = useState(false)
 
   useEffect(() => {
     try {
@@ -199,6 +203,30 @@ function App() {
     })
   }
 
+  // Open the gallery/file picker and watch for the user dismissing it without picking
+  const openGallery = () => {
+    setPickerOpened(true)
+    setErrorMessage('')
+
+    // Listen once on the window for focus returning — means picker was closed
+    const handleFocusReturn = () => {
+      // Small delay because the input change fires before window focus
+      setTimeout(() => {
+        setPickerOpened((wasOpen) => {
+          if (wasOpen) {
+            // Still open means no file was selected — show the permission nudge
+            setErrorMessage('No image selected. Please allow access and pick a photo to analyse it.')
+          }
+          return false
+        })
+      }, 600)
+      window.removeEventListener('focus', handleFocusReturn)
+    }
+    window.addEventListener('focus', handleFocusReturn)
+
+    fileInputRef.current?.click()
+  }
+
   const capturePhoto = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -222,6 +250,22 @@ function App() {
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) { setErrorMessage('Could not save the captured photo.'); return }
+        // Hold the image — don't commit until the user confirms
+        setPendingImage(URL.createObjectURL(blob))
+        setErrorMessage('')
+      },
+      'image/jpeg',
+      0.92,
+    )
+  }
+
+  const confirmPhoto = () => {
+    if (!pendingImage) return
+    applyPreviewUrl(pendingImage)
+    setPendingImage('')
     // ── TODO (when model is ready) ───────────────────────────────────────────
     // Run ONNX inference on the canvas pixels to get the food name.
     // See the integration guide at the top of this file for the full steps.
@@ -232,20 +276,19 @@ function App() {
     //   - Confidence score chip
     //   - Results panel / history list
     // ─────────────────────────────────────────────────────────────────────────
+  }
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) { setErrorMessage('Could not save the captured photo.'); return }
-        applyPreviewUrl(URL.createObjectURL(blob))
-        setErrorMessage('')
-      },
-      'image/jpeg',
-      0.92,
-    )
+  const retakePhoto = () => {
+    if (pendingImage) {
+      URL.revokeObjectURL(pendingImage)
+      setPendingImage('')
+    }
+    setErrorMessage('')
   }
 
   const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    setPickerOpened(false)
     if (!file) return
     applyPreviewUrl(URL.createObjectURL(file))
     setErrorMessage('')
@@ -274,45 +317,66 @@ function App() {
             </div>
           )}
 
-          {/* Bottom controls row */}
-          <div className="controls-row">
-            <button
-              type="button"
-              className="gallery-button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Open photos"
-            >
-              {latestImage ? (
-                <img className="gallery-thumb" src={latestImage} alt="Latest selected image" />
-              ) : (
-                <span className="gallery-fallback" aria-hidden="true" />
-              )}
-            </button>
+          {/* Pending photo preview — held until user confirms or retakes */}
+          {pendingImage && (
+            <div className="pending-overlay" aria-live="polite">
+              <img className="pending-preview" src={pendingImage} alt="Captured photo awaiting confirmation" />
+              <div className="pending-actions">
+                <button type="button" className="btn-retake" onClick={retakePhoto}>
+                  Retake
+                </button>
+                <button type="button" className="btn-use" onClick={confirmPhoto}>
+                  Use Photo
+                </button>
+              </div>
+            </div>
+          )}
 
-            <button
-              type="button"
-              className="capture-button"
-              onClick={capturePhoto}
-              aria-label="Take photo"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 4.5 7.6 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.1L15 4.5H9Zm3 12.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
-              </svg>
-            </button>
+          {/* Bottom controls row — hidden while reviewing a pending photo */}
+          {!pendingImage && (
+            <div className="controls-row">
+              <button
+                type="button"
+                className="gallery-button"
+                onClick={openGallery}
+                aria-label="Upload from gallery"
+              >
+                {latestImage ? (
+                  <img className="gallery-thumb" src={latestImage} alt="Last uploaded image" />
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="gallery-icon">
+                    <rect x="3" y="3" width="18" height="18" rx="3" ry="3" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                )}
+              </button>
 
-            {/* Spacer to balance gallery button on the right */}
-            <div className="controls-spacer" aria-hidden="true" />
-          </div>
+              <button
+                type="button"
+                className="capture-button"
+                onClick={capturePhoto}
+                aria-label="Take photo"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 4.5 7.6 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.1L15 4.5H9Zm3 12.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
+                </svg>
+              </button>
+
+              {/* Spacer to keep shutter centered */}
+              <div className="controls-spacer" aria-hidden="true" />
+            </div>
+          )}
 
           {errorMessage && <p className="error-message">{errorMessage}</p>}
 
           <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
 
+          {/* No capture="environment" — opens gallery on mobile, file picker on desktop */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden-input"
             onChange={handleFilePick}
           />

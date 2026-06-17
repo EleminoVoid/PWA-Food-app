@@ -322,12 +322,66 @@ input {
   display: block;
 }
 
-.gallery-fallback {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: rgba(148, 163, 184, 0.28);
+/* ── Gallery icon (shown when no image has been picked yet) ─────────────────── */
+.gallery-icon {
+  width: 26px;
+  height: 26px;
+  stroke: #94a3b8;
+  stroke-width: 1.6;
+  fill: none;
+}
+
+/* ── Pending photo overlay ──────────────────────────────────────────────────── */
+.pending-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+}
+
+.pending-preview {
+  flex: 1 1 0;
+  width: 100%;
+  object-fit: cover;
   display: block;
+}
+
+.pending-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+  padding: 16px max(var(--camera-margin), env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(2, 6, 23, 0.92) 60%, transparent);
+}
+
+.btn-retake,
+.btn-use {
+  flex: 1;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.btn-retake:active,
+.btn-use:active {
+  opacity: 0.82;
+  transform: scale(0.97);
+}
+
+.btn-retake {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.btn-use {
+  background: linear-gradient(135deg, #f8fafc, #67e8f9);
+  color: #0f172a;
 }
 
 .error-message {
