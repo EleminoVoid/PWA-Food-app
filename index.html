@@ -2,11 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content="A starter progressive web app built with Vite and React." />
+    <meta name="description" content="NutriScan helps you scan meals, review nutrition estimates, and keep a private offline food history." />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#063d24" />
     <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
-    <title>PWA Starter</title>
+    <title>NutriScan</title>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function (error) {
+          console.warn('NutriScan service worker registration failed.', error)
+        })
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
