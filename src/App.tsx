@@ -142,8 +142,11 @@ function App() {
   const [latestImage, setLatestImage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [showOnboarding, setShowOnboarding] = useState(false)
-  // true while the file picker is open, so we can detect a dismissed picker
-  const [pickerOpened, setPickerOpened] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  // scanHistory: confirmed photos — food label added once ONNX is wired in
+  const [scanHistory, setScanHistory] = useState<{ url: string; timestamp: string }[]>([])
+  // pickerOpen tracks whether the file picker is currently open to detect dismissal
+  const pickerOpenRef = useRef(false)
 
   useEffect(() => {
     try {
@@ -203,22 +206,16 @@ function App() {
     })
   }
 
-  // Open the gallery/file picker and watch for the user dismissing it without picking
   const openGallery = () => {
-    setPickerOpened(true)
+    pickerOpenRef.current = true
     setErrorMessage('')
 
-    // Listen once on the window for focus returning — means picker was closed
     const handleFocusReturn = () => {
-      // Small delay because the input change fires before window focus
       setTimeout(() => {
-        setPickerOpened((wasOpen) => {
-          if (wasOpen) {
-            // Still open means no file was selected — show the permission nudge
-            setErrorMessage('No image selected. Please allow access and pick a photo to analyse it.')
-          }
-          return false
-        })
+        if (pickerOpenRef.current) {
+          setErrorMessage('No image selected. Please allow access and pick a photo to analyse it.')
+          pickerOpenRef.current = false
+        }
       }, 600)
       window.removeEventListener('focus', handleFocusReturn)
     }
@@ -264,6 +261,10 @@ function App() {
 
   const confirmPhoto = () => {
     if (!pendingImage) return
+    const timestamp = new Date().toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+    setScanHistory((prev) => [{ url: pendingImage, timestamp }, ...prev])
     applyPreviewUrl(pendingImage)
     setPendingImage('')
     // ── TODO (when model is ready) ───────────────────────────────────────────
@@ -288,7 +289,7 @@ function App() {
 
   const handleFilePick = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    setPickerOpened(false)
+    pickerOpenRef.current = false
     if (!file) return
     applyPreviewUrl(URL.createObjectURL(file))
     setErrorMessage('')
@@ -419,11 +420,11 @@ function App() {
               </button>
             </div>
 
-            {history.length === 0 ? (
+            {scanHistory.length === 0 ? (
               <p className="history-empty">No scans yet. Take a photo to get started.</p>
             ) : (
               <ul className="history-list">
-                {history.map((item, i) => (
+                {scanHistory.map((item, i) => (
                   <li key={i} className="history-item">
                     <img
                       src={item.url}
