@@ -140,6 +140,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const cameraInputRef = useRef<HTMLInputElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
   const [screen, setScreen] = useState<Screen>('home')
@@ -489,8 +490,8 @@ function App() {
                   <button type="button" className="primary-action" onClick={startCamera} disabled={isAnalyzing}>
                     Start camera
                   </button>
-                  <button type="button" className="secondary-action" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
-                    Take or upload photo
+                  <button type="button" className="secondary-action" onClick={() => cameraInputRef.current?.click()} disabled={isAnalyzing}>
+                    Take photo
                   </button>
                 </div>
               </div>
@@ -568,6 +569,13 @@ function App() {
       <canvas ref={canvasRef} className="hidden-canvas" aria-hidden="true" />
       <input
         ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden-input"
+        onChange={handleFilePick}
+      />
+      <input
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
