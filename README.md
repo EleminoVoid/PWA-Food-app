@@ -57,7 +57,7 @@ npm run build
 
 This produces the static web output in `dist/`, which is what Capacitor uses.
 
-## Install And Use Offline
+## Install And Use Offline (No deployment to cloud)
 
 The installable PWA only works correctly from the production build:
 
@@ -72,7 +72,9 @@ Do not install from `npm run dev` / `http://localhost:5173` when testing offline
 
 Important offline rule: install from the production preview, then open the installed app once while you are online so the service worker can cache the latest app shell. After that, you can close Chrome, close the installed app, stop the local server, turn off Wi-Fi, reopen the installed app, navigate Home/Scan/History, scan or upload photos, and save history locally on the device.
 
-Camera note: live camera access requires a secure origin. `localhost` works on the same computer. If you test from a phone using a LAN URL like `http://192.168.x.x:4173`, the browser may block live camera access because it is not HTTPS. In that case, use the **Take or upload photo** fallback or serve the app over HTTPS.
+LAN phone testing note: your phone and PC must be connected to the same network. For example, if your PC is connected to `WiFi1`, your phone must also be connected to `WiFi1`. Then open the Vite LAN URL on the phone, such as `http://192.168.x.x:4173`.
+
+Camera note: live camera access requires a secure origin. `localhost` works on the same computer. If you test from a phone using a LAN URL like `http://192.168.x.x:4173`, Chrome may block live camera access because it is not HTTPS. For local testing only, open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, enable **Insecure origins treated as secure**, add your LAN URL such as `http://192.168.x.x:4173`, then relaunch Chrome. In production, use HTTPS instead. If camera access is still blocked, use the **Take photo** or **Upload photo** fallback.
 
 When the installed app comes back online, it checks for a newer service worker and refreshes automatically. If it still shows old content after reconnecting, uninstall the app, clear the site data for the preview URL, run `npm run build`, and install it again.
 
